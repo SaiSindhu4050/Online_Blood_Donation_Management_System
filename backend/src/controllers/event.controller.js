@@ -62,7 +62,26 @@ exports.getAllEvents = async (req, res) => {
       order: [['eventDate', 'ASC']]
     });
 
-    res.json({ success: true, events });
+    // Add registration count and maxRegistrations info to each event
+    const eventsWithCounts = await Promise.all(events.map(async (event) => {
+      const registrationCount = await Donation.count({
+        where: {
+          eventId: event.id,
+          status: { [Op.in]: ['pending', 'approved', 'scheduled'] }
+        }
+      });
+
+      return {
+        ...event.toJSON(),
+        registrationCount,
+        isFull: event.maxRegistrations !== null && registrationCount >= event.maxRegistrations,
+        spotsRemaining: event.maxRegistrations !== null 
+          ? Math.max(0, event.maxRegistrations - registrationCount)
+          : null
+      };
+    }));
+
+    res.json({ success: true, events: eventsWithCounts });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -192,7 +211,21 @@ exports.getEventRegistrations = async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    res.json({ success: true, donations, event });
+    // Count registrations by status
+    const registrationCount = donations.filter(d => 
+      ['pending', 'approved', 'scheduled'].includes(d.status)
+    ).length;
+
+    res.json({ 
+      success: true, 
+      donations, 
+      event: {
+        ...event.toJSON(),
+        registrationCount,
+        maxRegistrations: event.maxRegistrations,
+        isFull: event.maxRegistrations !== null && registrationCount >= event.maxRegistrations
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

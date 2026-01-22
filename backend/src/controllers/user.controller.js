@@ -77,29 +77,44 @@ exports.getDashboard = async (req, res) => {
       limit: 10
     });
 
-    // Get urgent requests in user's city (exclude user's own requests)
-    // Exclude user's own requests and filter by city
+    // Get urgent requests in user's city (exclude user's own requests and cancelled/deleted)
+    // Match by HOSPITAL city, not requestor city - donors should see requests for hospitals in their city
+    // This includes ALL users in same hospital city, even those who would get share card
+    // Exclude user's own requests and filter by hospital city
     // Op.ne will exclude user's own requests and include null userIds (anonymous requests)
+    // Note: Deleted requests won't appear since they're physically removed from database
+    // Use case-insensitive LIKE for hospital city matching
     const urgentRequests = await Request.findAll({
       where: {
         urgency: { [Op.in]: ['emergency', 'urgent'] },
-        status: { [Op.ne]: 'fulfilled' },
-        city: user.city, // Match city exactly
+        status: { [Op.notIn]: ['fulfilled', 'cancelled'] }, // Exclude fulfilled and cancelled
+        [Op.or]: [
+          { hospitalCity: { [Op.like]: `%${user.city}%` } }, // Match by hospital city (preferred)
+          { city: { [Op.like]: `%${user.city}%` } } // Fallback to legacy city field
+        ],
         userId: { [Op.ne]: req.user.id } // Exclude user's own requests (includes null userIds)
       },
       order: [['urgency', 'ASC'], ['requiredDate', 'ASC']],
       limit: 20
     });
 
-    // Get organizations in user's city
+    // Get organizations near user:
+    // 1) Prefer exact ZIP code match (most precise)
+    // 2) Fallback to city match (case-insensitive, partial)
+    const orgWhere = {
+      isActive: true
+    };
+
+    if (user.zipCode) {
+      orgWhere.zipCode = user.zipCode;
+    } else if (user.city) {
+      orgWhere.city = { [Op.like]: `%${user.city}%` };
+    }
+
     const organizations = await Organization.findAll({
-      where: { 
-        city: user.city,
-        isActive: true,
-        isVerified: true
-      },
+      where: orgWhere,
       limit: 10,
-      attributes: ['id', 'name', 'email', 'phone', 'address', 'city', 'state', 'website', 'description']
+      attributes: ['id', 'name', 'email', 'phone', 'address', 'city', 'state', 'zipCode', 'website', 'description']
     });
 
     // Get upcoming events in user's city
@@ -156,6 +171,44 @@ exports.getDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error('Dashboard error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update user privacy settings
+// @route   PUT /api/users/privacy-settings
+// @access  Private
+exports.updatePrivacySettings = async (req, res) => {
+  try {
+    const {
+      availableToDonate,
+      showPhoneNumber,
+      anonymousMode
+    } = req.body;
+
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Update privacy settings
+    const updateData = {};
+    if (availableToDonate !== undefined) updateData.availableToDonate = availableToDonate;
+    if (showPhoneNumber !== undefined) updateData.showPhoneNumber = showPhoneNumber;
+    if (anonymousMode !== undefined) updateData.anonymousMode = anonymousMode;
+
+    await user.update(updateData);
+
+    res.json({ 
+      success: true, 
+      message: 'Privacy settings updated successfully',
+      privacySettings: {
+        availableToDonate: user.availableToDonate,
+        showPhoneNumber: user.showPhoneNumber,
+        anonymousMode: user.anonymousMode
+      }
+    });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };

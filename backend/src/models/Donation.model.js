@@ -117,6 +117,15 @@ module.exports = (sequelize) => {
     scheduledTime: {
       type: DataTypes.STRING,
       allowNull: true
+    },
+    checkInCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Unique code for QR code check-in'
+    },
+    checkInCodeGeneratedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'donations'

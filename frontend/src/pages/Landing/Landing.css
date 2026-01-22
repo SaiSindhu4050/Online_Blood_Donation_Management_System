@@ -2,53 +2,63 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 64px);
-  padding: 24px;
+  min-height: calc(100vh - 70px);
+  padding: clamp(1.5rem, 4vw, 3rem);
   background: linear-gradient(135deg, #fff5f5 0%, #ffffff 60%);
 }
 
 .landing-card {
   width: 100%;
-  max-width: 680px;
+  max-width: min(800px, 50vw);
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: clamp(1rem, 2vw, 1.5rem);
   box-shadow: 0 12px 30px rgba(0,0,0,0.08);
-  padding: 28px;
+  padding: clamp(1.75rem, 4vw, 3.5rem);
 }
 
 .landing-header {
+  display: flex;             /* Use Flexbox */
+  flex-direction: column;    /* Stack items vertically (Icon on top of Text) */
+  align-items: center;       /* Center items horizontally */
+  justify-content: center;   /* Center items vertically if needed */
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: clamp(1rem, 2.5vw, 2rem);
+  gap : 0.5rem;
 }
 
 .landing-header .logo-icon {
-  font-size: 28px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1; /* Removes invisible vertical space inside the font */
+  margin: 0;
+  display: block; /* Ensures it acts as a block to sit on its own line */
 }
 
 .landing-header h1 {
-  margin: 8px 0 4px 0;
-  font-size: 28px;
+  margin: 0 0 clamp(0.25rem, 1vw, 0.5rem) 0; /* Clean up margins */
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
 }
 
 .landing-header p {
   margin: 0;
   color: #666;
+  font-size: clamp(0.9rem, 1.8vw, 1.125rem);
 }
 
 .landing-options {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(1rem, 2.5vw, 1.5rem);
+  margin-top: clamp(1rem, 2.5vw, 2rem);
 }
 
 .landing-btn {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: clamp(0.875rem, 2vw, 1.25rem);
   width: 100%;
-  padding: 16px;
-  border-radius: 12px;
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  border-radius: clamp(0.75rem, 1.5vw, 1rem);
   border: 1px solid #eee;
   background: #fafafa;
   cursor: pointer;
@@ -62,22 +72,28 @@
 }
 
 .landing-btn .emoji {
-  font-size: 24px;
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  flex-shrink: 0;
 }
 
 .landing-btn .content {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  text-align: left;
+  gap: clamp(0.25rem, 0.8vw, 0.5rem);
+  width: 100%;
 }
 
 .landing-btn .title {
   font-weight: 600;
+  font-size: clamp(1rem, 2vw, 1.25rem);
 }
 
 .landing-btn .desc {
   color: #666;
-  font-size: 14px;
+  
+  font-size: clamp(0.875rem, 1.5vw, 1rem);
 }
 
 .landing-btn.user {
@@ -88,9 +104,85 @@
   border-color: #e2e8f0;
 }
 
+.landing-btn.admin {
+  border-color: #fef3c7;
+  background: #fffbeb;
+}
+
+.landing-btn.admin:hover {
+  border-color: #f59e0b;
+  background: #fef3c7;
+}
+
+/* Large Desktop - Enhanced Scaling */
+@media (min-width: 1400px) {
+  .landing-card {
+    max-width: 800px;
+    padding: 3.5rem;
+    border-radius: 1.5rem;
+  }
+
+  .landing-header {
+    margin-bottom: 2rem;
+  }
+
+  .landing-header .logo-icon {
+    font-size: 3.5rem;
+  }
+
+  .landing-header h1 {
+    font-size: 2.5rem;
+    margin: 1rem 0 0.5rem 0;
+  }
+
+  .landing-header p {
+    font-size: 1.125rem;
+  }
+
+  .landing-options {
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .landing-btn {
+    padding: 1.75rem;
+    gap: 1.25rem;
+    border-radius: 1rem;
+  }
+
+  .landing-btn .emoji {
+    font-size: 2.5rem;
+  }
+
+  .landing-btn .title {
+    font-size: 1.25rem;
+  }
+
+  .landing-btn .desc {
+    font-size: 1rem;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1024px) and (min-width: 641px) {
+  .landing-card {
+    max-width: min(700px, 90vw);
+  }
+}
+
+/* Mobile */
 @media (max-width: 640px) {
+  .landing-card {
+    max-width: 100%;
+  }
+
   .landing-options {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .landing-btn {
+    padding: 1.25rem;
   }
 }
 

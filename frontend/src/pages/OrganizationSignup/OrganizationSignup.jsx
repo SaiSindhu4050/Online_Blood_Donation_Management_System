@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { setOrgAuthToken, clearCurrentUser } from '../../utils/storage';
 import { authAPI } from '../../utils/api';
@@ -13,6 +13,7 @@ const OrganizationSignup = () => {
     city: '',
     state: '',
     address: '',
+    zipCode: '',
     specialty: '',
     password: '',
     confirmPassword: '',
@@ -20,6 +21,37 @@ const OrganizationSignup = () => {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const formContainerRef = useRef(null);
+
+  // Reset scroll position on mount for laptop screens
+  useEffect(() => {
+    const resetScroll = () => {
+      const container = formContainerRef.current;
+      if (container) {
+        container.scrollTop = 0;
+      }
+    };
+    
+    // Reset immediately
+    resetScroll();
+    
+    // Reset after DOM is ready
+    setTimeout(resetScroll, 0);
+    
+    // Reset after a short delay
+    setTimeout(resetScroll, 10);
+    setTimeout(resetScroll, 50);
+    setTimeout(resetScroll, 100);
+    
+    // Reset after layout is complete (double RAF ensures layout is done)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resetScroll();
+        // One more reset after a brief delay
+        setTimeout(resetScroll, 10);
+      });
+    });
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -62,6 +94,10 @@ const OrganizationSignup = () => {
 
     if (!formData.address) {
       newErrors.address = 'Address is required';
+    }
+
+    if (!formData.zipCode) {
+      newErrors.zipCode = 'ZIP code is required';
     }
 
     if (!formData.specialty) {
@@ -185,7 +221,7 @@ const OrganizationSignup = () => {
           </div>
         </div>
 
-        <div className="org-signup-right">
+        <div className="org-signup-right" ref={formContainerRef}>
           <div className="org-signup-form-container">
             <div className="org-signup-header">
               <h2>Create Organization Account</h2>
@@ -312,6 +348,26 @@ const OrganizationSignup = () => {
                   </div>
                   {errors.state && <span className="error-message">{errors.state}</span>}
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="zipCode">ZIP Code *</label>
+                <div className="input-wrapper">
+                  <svg className="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M4 4H16V16H4V4Z" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M4 8H16" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                  <input
+                    type="text"
+                    id="zipCode"
+                    name="zipCode"
+                    value={formData.zipCode}
+                    onChange={handleChange}
+                    placeholder="e.g. 08028"
+                    className={errors.zipCode ? 'error' : ''}
+                  />
+                </div>
+                {errors.zipCode && <span className="error-message">{errors.zipCode}</span>}
               </div>
 
               <div className="form-group">

@@ -1,4 +1,4 @@
-const { Organization, Event, Donation, Request, User, BloodInventory, DonationRescheduleRequest, Notification } = require('../models');
+const { Organization, Event, Donation, Request, User, BloodInventory, DonationRescheduleRequest, Notification, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 // @desc    Get organization profile
@@ -100,12 +100,21 @@ exports.getDashboard = async (req, res) => {
     const approvedDonations = allDonations.filter(d => d.status === 'approved' || d.status === 'scheduled');
     const completedDonations = allDonations.filter(d => d.status === 'completed');
 
-    // Get pending requests in the organization's city
-    // Organizations can see requests in their city to potentially fulfill
+    // Get pending and active/IN_PROGRESS requests in the organization's city
+    // Organizations can see requests for hospitals in their city to potentially fulfill
+    // Match by HOSPITAL city, not requestor city
+    // Use case-insensitive LIKE matching for hospital city
+    const cityFilter = organization.city 
+      ? { [Op.like]: `%${organization.city}%` } 
+      : { [Op.ne]: null };
+    
     const pendingRequests = await Request.findAll({
       where: {
-        city: organization.city,
-        status: 'pending'
+        [Op.or]: [
+          { hospitalCity: cityFilter }, // Match by hospital city (preferred)
+          { city: cityFilter } // Fallback to legacy city field
+        ],
+        status: { [Op.in]: ['pending', 'IN_PROGRESS', 'matched'] } // Include active/in-progress requests
       },
       include: [
         {
@@ -119,7 +128,7 @@ exports.getDashboard = async (req, res) => {
             {
               model: User,
               as: 'user',
-              attributes: ['id', 'fullName', 'email', 'phone', 'bloodGroup', 'city'],
+              attributes: ['id', 'fullName', 'email', 'phone', 'bloodGroup', 'city', 'showPhoneNumber', 'availableToDonate'],
               required: false
             }
           ]
@@ -127,13 +136,43 @@ exports.getDashboard = async (req, res) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'fullName', 'email'],
+          attributes: ['id', 'fullName', 'email', 'showPhoneNumber', 'availableToDonate'],
           required: false
         }
       ],
       order: [['urgency', 'ASC'], ['requiredDate', 'ASC']],
       limit: 20
     });
+
+    // Filter out users who are not available to donate and conditionally hide phone numbers
+    const filteredRequests = pendingRequests.map(request => {
+      // Filter interested donations to only include available donors
+      if (request.interestedDonations) {
+        request.interestedDonations = request.interestedDonations.filter(donation => {
+          if (donation.user && !donation.user.availableToDonate) {
+            return false; // Exclude unavailable donors
+          }
+          // Hide phone if user doesn't want to show it
+          if (donation.user && !donation.user.showPhoneNumber) {
+            donation.user.phone = null;
+          }
+          return true;
+        });
+      }
+      
+      // Hide phone for request user if they don't want to show it
+      if (request.user && !request.user.showPhoneNumber) {
+        request.user.phone = null;
+      }
+      
+      // Exclude requests from users who are not available (if applicable)
+      // Note: We still show the request, but filter out unavailable donors
+      
+      return request;
+    });
+
+    // Debug logging (can be removed in production)
+    console.log(`Organization ${organization.name} (city: ${organization.city}) found ${filteredRequests.length} requests`);
 
     // Calculate stats
     const totalEvents = await Event.count({
@@ -147,27 +186,144 @@ exports.getDashboard = async (req, res) => {
       }
     });
 
-    const totalPendingDonations = pendingDonations.length;
-    const totalPendingRequests = pendingRequests.length;
+    // Filter pending donations to exclude unavailable users and hide phone numbers
+    const filteredPendingDonations = pendingDonations.map(donation => {
+      const donationObj = donation.toJSON ? donation.toJSON() : donation;
+      
+      // If donation has user info, check privacy settings
+      if (donationObj.user) {
+        // Hide phone if user doesn't want to show it
+        if (!donationObj.user.showPhoneNumber) {
+          donationObj.user.phone = null;
+        }
+      }
+      
+      return donationObj;
+    }).filter(donation => {
+      // Filter out donations from users who are not available
+      if (donation.user && donation.user.availableToDonate === false) {
+        return false;
+      }
+      return true;
+    });
 
     res.json({
       success: true,
       dashboard: {
-        pendingDonations: pendingDonations,
+        pendingDonations: filteredPendingDonations,
         approvedDonations: approvedDonations,
         completedDonations: completedDonations,
-        pendingRequests: pendingRequests,
+        pendingRequests: filteredRequests,
         events: events,
         stats: {
           totalEvents,
           upcomingEvents,
-          totalPendingDonations,
-          totalPendingRequests
+          totalPendingDonations: filteredPendingDonations.length,
+          totalPendingRequests: filteredRequests.length
         }
       }
     });
   } catch (error) {
     console.error('Organization dashboard error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get available donors in organization's city
+// @route   GET /api/organizations/available-donors
+// @access  Private
+exports.getAvailableDonors = async (req, res) => {
+  try {
+    const organization = await Organization.findByPk(req.user.id);
+    
+    if (!organization) {
+      return res.status(404).json({ success: false, message: 'Organization not found' });
+    }
+
+    // Get query parameters for filtering
+    const { bloodGroup, city, state } = req.query;
+
+    // Build where clause
+    // Handle availableToDonate: treat NULL as TRUE (default for users created before privacy settings)
+    const whereClause = {
+      isActive: true,
+      [Op.or]: [
+        { availableToDonate: true },
+        { availableToDonate: null } // Include users with NULL (created before privacy settings migration)
+      ],
+      role: 'user'
+    };
+
+    // Filter by organization's city if no city specified
+    // Use case-insensitive LIKE for city matching to handle case variations
+    if (city) {
+      whereClause.city = { [Op.like]: `%${city}%` };
+    } else if (organization.city) {
+      whereClause.city = { [Op.like]: `%${organization.city}%` };
+    }
+
+    // Filter by state if provided (case-insensitive)
+    if (state) {
+      whereClause.state = { [Op.like]: `%${state}%` };
+    }
+
+    // Filter by blood group if provided
+    if (bloodGroup) {
+      whereClause.bloodGroup = bloodGroup;
+    }
+
+    // Get available donors
+    const donors = await User.findAll({
+      where: whereClause,
+      attributes: [
+        'id',
+        'fullName',
+        'email',
+        'phone',
+        'bloodGroup',
+        'city',
+        'state',
+        'lastDonationAt',
+        'showPhoneNumber',
+        'anonymousMode'
+      ],
+      order: [
+        [sequelize.literal('CASE WHEN lastDonationAt IS NULL THEN 1 ELSE 0 END'), 'ASC'],
+        ['lastDonationAt', 'DESC'],
+        ['fullName', 'ASC']
+      ],
+      limit: 100
+    });
+
+    // Process donors to respect privacy settings
+    const processedDonors = donors.map(donor => {
+      const donorObj = donor.toJSON ? donor.toJSON() : donor;
+      
+      // Hide phone if user doesn't want to show it
+      if (!donorObj.showPhoneNumber) {
+        donorObj.phone = null;
+      }
+      
+      // Hide name if anonymous mode is enabled
+      if (donorObj.anonymousMode) {
+        donorObj.fullName = `Anonymous Donor #${donorObj.id}`;
+      }
+      
+      return donorObj;
+    });
+
+    res.json({
+      success: true,
+      donors: processedDonors,
+      count: processedDonors.length,
+      filters: {
+        city: city || organization.city,
+        state: state || null,
+        bloodGroup: bloodGroup || null
+      }
+    });
+  } catch (error) {
+    console.error('Get available donors error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -236,9 +392,14 @@ exports.acceptRequestAndDonation = async (req, res) => {
       });
     }
 
-    // Verify request is in organization's city
+    // Verify request is in organization's city (check hospital city, not requestor city)
+    // Use case-insensitive matching
     const organization = await Organization.findByPk(req.user.id);
-    if (request.city !== organization.city) {
+    const hospitalCity = (request.hospitalCity || request.city || '').toLowerCase().trim();
+    const orgCity = (organization.city || '').toLowerCase().trim();
+    
+    if (hospitalCity && orgCity && hospitalCity !== orgCity && 
+        !hospitalCity.includes(orgCity) && !orgCity.includes(hospitalCity)) {
       return res.status(403).json({ 
         success: false,
         message: 'Request is not in your organization\'s city' 
@@ -372,15 +533,26 @@ exports.getInventory = async (req, res) => {
   }
 };
 
-// @desc    Get all organizations
+// @desc    Get all organizations (supports filtering by zipCode, city, or search term)
 // @route   GET /api/organizations
 // @access  Public
 exports.getAllOrganizations = async (req, res) => {
   try {
-    const { city } = req.query;
+    const { city, zipCode, search } = req.query;
     let where = { isActive: true };
     
-    if (city) {
+    if (search) {
+      // Flexible search: match by name, city, or zipCode (case-insensitive for text fields)
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { city: { [Op.like]: `%${search}%` } },
+        { zipCode: { [Op.like]: `%${search}%` } }
+      ];
+    } else if (zipCode) {
+      // Default precise filter: exact ZIP match
+      where.zipCode = zipCode;
+    } else if (city) {
+      // Fallback: city-based search
       where.city = { [Op.like]: `%${city}%` };
     }
 
@@ -544,6 +716,199 @@ exports.handleRescheduleRequest = async (req, res) => {
     }
   } catch (error) {
     console.error('Handle reschedule request error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Mark patient as ready (Phase 2: Critical Wait)
+// @route   POST /api/organizations/requests/:id/patient-ready
+// @access  Private (Organization)
+exports.markPatientReady = async (req, res) => {
+  try {
+    const { donorETAs } = req.body; // Array of {donorId, eta, status}
+    const request = await Request.findByPk(req.params.id);
+    
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' });
+    }
+
+    // Check if organization is in same city (check hospital city, not requestor city)
+    // Use case-insensitive matching
+    const organization = await Organization.findByPk(req.user.id);
+    const hospitalCity = (request.hospitalCity || request.city || '').toLowerCase().trim();
+    const orgCity = (organization.city || '').toLowerCase().trim();
+    
+    if (hospitalCity && orgCity && hospitalCity !== orgCity && 
+        !hospitalCity.includes(orgCity) && !orgCity.includes(hospitalCity)) {
+      return res.status(403).json({ success: false, message: 'You can only manage requests in your city' });
+    }
+
+    // Update request to Phase 2: Critical Wait
+    const now = new Date();
+    const waitEndsAt = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes from now
+
+    await request.update({
+      workflowPhase: 'critical_wait',
+      patientReadyAt: now,
+      waitForDonorsStartedAt: now,
+      waitForDonorsEndsAt: waitEndsAt,
+      donorETAs: donorETAs || []
+    });
+
+    res.json({
+      success: true,
+      message: 'Patient marked as ready. 30-minute countdown started.',
+      request: request,
+      waitEndsAt: waitEndsAt
+    });
+  } catch (error) {
+    console.error('Mark patient ready error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Wait for donors (Phase 2: Continue waiting)
+// @route   POST /api/organizations/requests/:id/wait-for-donors
+// @access  Private (Organization)
+exports.waitForDonors = async (req, res) => {
+  try {
+    const request = await Request.findByPk(req.params.id);
+    
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' });
+    }
+
+    // Check if organization is in same city (check hospital city, not requestor city)
+    // Use case-insensitive matching
+    const organization = await Organization.findByPk(req.user.id);
+    const hospitalCity = (request.hospitalCity || request.city || '').toLowerCase().trim();
+    const orgCity = (organization.city || '').toLowerCase().trim();
+    
+    if (hospitalCity && orgCity && hospitalCity !== orgCity && 
+        !hospitalCity.includes(orgCity) && !orgCity.includes(hospitalCity)) {
+      return res.status(403).json({ success: false, message: 'You can only manage requests in your city' });
+    }
+
+    // Extend wait time by 30 minutes
+    const now = new Date();
+    const waitEndsAt = new Date(now.getTime() + 30 * 60 * 1000);
+
+    await request.update({
+      waitForDonorsStartedAt: now,
+      waitForDonorsEndsAt: waitEndsAt
+    });
+
+    res.json({
+      success: true,
+      message: 'Waiting for donors. 30-minute countdown extended.',
+      waitEndsAt: waitEndsAt
+    });
+  } catch (error) {
+    console.error('Wait for donors error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Emergency override to unlock inventory immediately
+// @route   POST /api/organizations/requests/:id/emergency-override
+// @access  Private (Organization)
+exports.emergencyOverride = async (req, res) => {
+  try {
+    const request = await Request.findByPk(req.params.id);
+    
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' });
+    }
+
+    // Check if organization is in same city (check hospital city, not requestor city)
+    // Use case-insensitive matching
+    const organization = await Organization.findByPk(req.user.id);
+    const hospitalCity = (request.hospitalCity || request.city || '').toLowerCase().trim();
+    const orgCity = (organization.city || '').toLowerCase().trim();
+    
+    if (hospitalCity && orgCity && hospitalCity !== orgCity && 
+        !hospitalCity.includes(orgCity) && !orgCity.includes(hospitalCity)) {
+      return res.status(403).json({ success: false, message: 'You can only manage requests in your city' });
+    }
+
+    // Unlock inventory immediately
+    const now = new Date();
+    await request.update({
+      inventoryLocked: false,
+      emergencyOverride: true,
+      inventoryUnlockedAt: now,
+      workflowPhase: 'hard_stop'
+    });
+
+    res.json({
+      success: true,
+      message: 'Emergency override activated. Inventory unlocked.',
+      request: request
+    });
+  } catch (error) {
+    console.error('Emergency override error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get workflow status for a request
+// @route   GET /api/organizations/requests/:id/workflow-status
+// @access  Private (Organization)
+exports.getWorkflowStatus = async (req, res) => {
+  try {
+    const request = await Request.findByPk(req.params.id, {
+      include: [
+        {
+          model: Donation,
+          as: 'interestedDonations',
+          where: { status: { [Op.in]: ['approved', 'scheduled', 'completed'] } },
+          required: false,
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'fullName', 'email', 'phone', 'bloodGroup']
+            }
+          ]
+        }
+      ]
+    });
+    
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' });
+    }
+
+    // Calculate time remaining for each phase
+    const now = new Date();
+    const requestAge = (now - new Date(request.requestCreatedAt || request.createdAt)) / (1000 * 60); // minutes
+    const timeUntilAssessment = Math.max(0, 60 - requestAge); // 1 hour = 60 minutes
+    const timeUntilHardStop = Math.max(0, 120 - requestAge); // 2 hours = 120 minutes
+
+    let waitTimeRemaining = null;
+    if (request.waitForDonorsEndsAt) {
+      waitTimeRemaining = Math.max(0, (new Date(request.waitForDonorsEndsAt) - now) / (1000 * 60)); // minutes
+    }
+
+    res.json({
+      success: true,
+      workflow: {
+        phase: request.workflowPhase,
+        inventoryLocked: request.inventoryLocked,
+        unitsRequired: request.unitsRequired,
+        unitsCollected: request.unitsCollected || 0,
+        unitsNeeded: Math.max(0, request.unitsRequired - (request.unitsCollected || 0)),
+        emergencyOverride: request.emergencyOverride,
+        requestAge: requestAge,
+        timeUntilAssessment: timeUntilAssessment,
+        timeUntilHardStop: timeUntilHardStop,
+        waitTimeRemaining: waitTimeRemaining,
+        donorETAs: request.donorETAs || [],
+        finalCallSent: request.finalCallSent
+      },
+      request: request
+    });
+  } catch (error) {
+    console.error('Get workflow status error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

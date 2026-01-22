@@ -1,70 +1,319 @@
-# Getting Started with Create React App
+# Frontend - Blood Donation Management System
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React-based frontend application for the Blood Donation Management System. This is a single-page application (SPA) built with React Router for navigation and modern React patterns.
 
-## Available Scripts
+## 🎯 Overview
 
-In the project directory, you can run:
+The frontend provides a user-friendly interface for:
+- **Donors** to register donations, view requests, and manage their profile
+- **Recipients** to post blood requests and find donors
+- **Organizations** to manage donations, requests, events, and inventory
 
-### `npm start`
+## 🛠️ Tech Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **React** 19.2.0 - UI library
+- **React Router DOM** 7.9.5 - Client-side routing
+- **CSS3** - Styling (component-scoped CSS files)
+- **Fetch API** - HTTP requests to backend
+- **localStorage** - Client-side storage for authentication tokens
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 📁 Project Structure
 
-### `npm test`
+```
+frontend/
+├── public/                 # Static assets
+│   ├── index.html
+│   ├── favicon.ico
+│   └── manifest.json
+│
+├── src/
+│   ├── components/         # Reusable components
+│   │   └── Navbar/         # Navigation bar component
+│   │       ├── Navbar.jsx
+│   │       └── Navbar.css
+│   │
+│   ├── pages/             # Page components
+│   │   ├── Home/           # Landing/home page
+│   │   ├── Landing/        # Alternative landing page
+│   │   ├── Donate/         # Donation form
+│   │   ├── Request/        # Blood request form
+│   │   ├── Login/          # User login page
+│   │   ├── Signup/          # User registration page
+│   │   ├── UserDashboard/  # User dashboard
+│   │   ├── OrganizationLogin/      # Organization login
+│   │   ├── OrganizationSignup/    # Organization registration
+│   │   └── OrganizationDashboard/ # Organization dashboard
+│   │
+│   ├── utils/              # Utility functions
+│   │   ├── api.js          # API client functions
+│   │   └── storage.js      # localStorage helpers
+│   │
+│   ├── App.js              # Main app component with routing
+│   ├── App.css             # Global app styles
+│   ├── index.js            # React entry point
+│   └── index.css           # Global styles
+│
+├── package.json
+└── README.md
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 🚀 Getting Started
 
-### `npm run build`
+### Prerequisites
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Node.js (v14 or higher)
+- npm (v6 or higher)
+- Backend server running (see `../backend/README.md`)
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Installation
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
 
-### `npm run eject`
+2. Install dependencies:
+```bash
+npm install
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+3. Configure API endpoint (optional):
+   - The default API URL is `http://localhost:5000/api`
+   - To change it, create a `.env` file in the `frontend` directory:
+   ```env
+   REACT_APP_API_URL=http://localhost:5000/api
+   ```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+4. Start the development server:
+```bash
+npm start
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+The app will open in your browser at `http://localhost:3000`
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 📱 Available Routes
 
-## Learn More
+| Route | Component | Description | Auth Required |
+|-------|-----------|-------------|---------------|
+| `/` | Home | Landing page with features and CTA | No |
+| `/donate` | Donate | Donation registration form | Optional |
+| `/request` | Request | Blood request form | Optional |
+| `/login` | Login | User login page | No |
+| `/signup` | Signup | User registration page | No |
+| `/dashboard` | UserDashboard | User dashboard with stats and history | Yes (User) |
+| `/org-login` | OrganizationLogin | Organization login page | No |
+| `/org-signup` | OrganizationSignup | Organization registration page | No |
+| `/org-dashboard` | OrganizationDashboard | Organization dashboard | Yes (Org) |
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## 🔑 Authentication
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+The frontend uses JWT tokens stored in `localStorage` for authentication:
 
-### Code Splitting
+- **User tokens**: Stored under `bl_current_user_v1`
+- **Organization tokens**: Stored under `bl_current_org_v1`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+The API client (`utils/api.js`) automatically includes the appropriate token in request headers.
 
-### Analyzing the Bundle Size
+### Authentication Flow
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+1. User/Organization logs in via `/login` or `/org-login`
+2. Backend returns JWT token
+3. Token is stored in `localStorage` with user/org data
+4. Subsequent API requests include token in `Authorization: Bearer <token>` header
+5. On logout, token is removed from `localStorage`
 
-### Making a Progressive Web App
+## 📡 API Integration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+The frontend communicates with the backend through the API client in `src/utils/api.js`. All API functions are organized by resource:
 
-### Advanced Configuration
+### Available API Modules
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- **authAPI** - Authentication (register, login, get current user)
+- **userAPI** - User profile and dashboard
+- **organizationAPI** - Organization profile, dashboard, inventory
+- **donationAPI** - Donation CRUD operations
+- **requestAPI** - Blood request CRUD operations
+- **eventAPI** - Event management
 
-### Deployment
+### Example Usage
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+```javascript
+import { donationAPI } from '../utils/api';
 
-### `npm run build` fails to minify
+// Create a donation
+const donation = await donationAPI.createDonation({
+  bloodGroup: 'O+',
+  city: 'New York',
+  eventDate: '2024-12-25',
+  // ... other fields
+});
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+// Get user dashboard
+const dashboard = await userAPI.getDashboard();
+```
+
+## 🎨 Component Structure
+
+### Pages
+
+Each page is a self-contained component with its own CSS file:
+
+- **Home.jsx** - Landing page with hero section, features, and call-to-action
+- **Donate.jsx** - Donation form with validation and 56-day cooldown check
+- **Request.jsx** - Blood request form with donor matching
+- **UserDashboard.jsx** - User dashboard showing:
+  - Donation history and statistics
+  - Blood requests
+  - Upcoming appointments
+  - Urgent requests in area
+- **OrganizationDashboard.jsx** - Organization dashboard showing:
+  - Pending donations for approval
+  - Blood requests
+  - Event management
+  - Inventory tracking
+  - Analytics
+
+### Shared Components
+
+- **Navbar** - Navigation bar with conditional rendering based on auth state
+
+## 💾 Client-Side Storage
+
+The app uses `localStorage` for:
+- Authentication tokens and user/org data
+- Caching (optional, for offline support)
+
+**Note**: Sensitive data should not be stored in `localStorage` in production. The current implementation stores JWT tokens, which is acceptable for this use case.
+
+## 🎯 Key Features
+
+### Donation Management
+
+- **56-Day Cooldown Validation**: Prevents users from donating too frequently
+- **Event Linking**: Donations can be linked to organization events
+- **Request Linking**: Donations can be linked to specific blood requests (peer-to-peer matching)
+- **Status Tracking**: Track donation status (pending, approved, completed, cancelled)
+
+### Request Management
+
+- **Automatic Donor Matching**: System finds eligible donors based on:
+  - Blood group compatibility
+  - Location (city)
+  - Donation eligibility (56-day cooldown)
+- **Urgency Levels**: Emergency, urgent, and normal requests
+- **Status Tracking**: Track request status (pending, matched, fulfilled)
+
+### Organization Features
+
+- **Donation Approval**: Review and approve/deny pending donations
+- **Inventory Management**: Track blood inventory with expiration dates
+- **Event Management**: Create and manage donation events
+- **Reschedule Requests**: Handle donation reschedule requests from users
+
+## 🔧 Development
+
+### Available Scripts
+
+```bash
+# Start development server (with hot reload)
+npm start
+
+# Build for production
+npm run build
+
+# Run tests
+npm test
+
+# Eject from Create React App (one-way operation)
+npm run eject
+```
+
+### Development Tips
+
+1. **Hot Reload**: Changes to components automatically reload in the browser
+2. **API Errors**: Check browser console and network tab for API errors
+3. **Authentication**: Clear `localStorage` if experiencing auth issues:
+   ```javascript
+   localStorage.clear();
+   ```
+
+### Environment Variables
+
+Create a `.env` file in the `frontend` directory:
+
+```env
+REACT_APP_API_URL=http://localhost:5000/api
+```
+
+**Note**: Environment variables must be prefixed with `REACT_APP_` to be accessible in the React app.
+
+## 🐛 Troubleshooting
+
+### CORS Errors
+
+- Ensure backend CORS is configured to allow `http://localhost:3000`
+- Check `FRONTEND_URL` in backend `.env` file
+
+### API Connection Issues
+
+- Verify backend server is running on port 5000
+- Check `REACT_APP_API_URL` in frontend `.env`
+- Check browser console for network errors
+
+### Authentication Issues
+
+- Clear `localStorage` and log in again
+- Verify JWT token is being stored correctly
+- Check token expiration (default: 7 days)
+
+### Build Errors
+
+- Delete `node_modules` and `package-lock.json`
+- Run `npm install` again
+- Clear npm cache: `npm cache clean --force`
+
+## 📦 Building for Production
+
+1. Build the production bundle:
+```bash
+npm run build
+```
+
+2. The `build/` folder contains optimized production files
+
+3. Deploy the `build/` folder to a static hosting service:
+   - **Netlify**: Drag and drop the `build` folder
+   - **Vercel**: Connect your repo and set build command to `npm run build`
+   - **AWS S3**: Upload `build/` contents to an S3 bucket
+   - **Nginx**: Serve `build/` as static files
+
+4. Update backend `FRONTEND_URL` to production URL
+
+## 🎨 Styling
+
+Each component has its own CSS file for scoped styling:
+- Component-specific styles in `ComponentName.css`
+- Global styles in `App.css` and `index.css`
+
+The app uses a modern, responsive design with:
+- Mobile-first approach
+- Clean, professional UI
+- Accessible color contrasts
+- Smooth transitions and animations
+
+## 📚 Additional Resources
+
+- [React Documentation](https://reactjs.org/)
+- [React Router Documentation](https://reactrouter.com/)
+- [Create React App Documentation](https://create-react-app.dev/)
+
+## 🔗 Related Documentation
+
+- **Backend API**: See `../backend/README.md`
+- **Database**: See `../backend/db/README.md`
+- **Main Project**: See `../README.md`
+
+---
+
+**Last Updated**: 2024
+**Version**: 1.0.0

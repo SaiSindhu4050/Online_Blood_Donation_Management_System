@@ -7,9 +7,13 @@ import {
   requestAPI, 
   eventAPI, 
   organizationAPI, 
-  authAPI 
+  authAPI,
+  testimonialAPI
 } from '../../utils/api';
 import Navbar from '../../components/Navbar/Navbar';
+import NotificationList from '../../components/NotificationList/NotificationList';
+import ShareCard from '../../components/ShareCard/ShareCard';
+import EventCalendar from '../../components/EventCalendar/EventCalendar';
 import './UserDashboard.css';
 
 const UserDashboard = () => {
@@ -19,11 +23,14 @@ const UserDashboard = () => {
   const [donations, setDonations] = useState([]);
   const [userRequests, setUserRequests] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [organizationSearch, setOrganizationSearch] = useState('');
   const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [urgentRequests, setUrgentRequests] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [scheduledAppointments, setScheduledAppointments] = useState([]);
   const [events, setEvents] = useState([]);
+  const [eventsViewMode, setEventsViewMode] = useState('list'); // 'list' or 'calendar'
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateError, setDonateError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -57,6 +64,29 @@ const UserDashboard = () => {
   const [showDonationsHistoryModal, setShowDonationsHistoryModal] = useState(false);
   const [rescheduleRequests, setRescheduleRequests] = useState([]);
   const [showRescheduleSuccessModal, setShowRescheduleSuccessModal] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    // Load theme from localStorage or default to 'light'
+    return localStorage.getItem('theme') || 'light';
+  });
+  const [privacySettings, setPrivacySettings] = useState(() => {
+    // Load from localStorage or default values
+    const saved = localStorage.getItem('privacySettings');
+    return saved ? JSON.parse(saved) : {
+      availableToDonate: true,
+      showPhoneNumber: true, // true = show phone, false = app only
+      anonymousMode: false
+    };
+  });
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [testimonials, setTestimonials] = useState([]);
+  const [testimonialForm, setTestimonialForm] = useState({
+    message: '',
+    authorName: '',
+    authorRole: 'Regular Donor',
+    userType: 'donor'
+  });
+  const [submittingTestimonial, setSubmittingTestimonial] = useState(false);
 
   // Daily health benefits
   const healthBenefits = [
@@ -139,6 +169,23 @@ const UserDashboard = () => {
         if (profileResponse?.success && profileResponse?.user) {
           const fullUser = profileResponse.user;
           setUserData(fullUser);
+          
+          // Load privacy settings from backend if available
+          if (fullUser.availableToDonate !== undefined || 
+              fullUser.showPhoneNumber !== undefined || 
+              fullUser.anonymousMode !== undefined) {
+            setPrivacySettings({
+              availableToDonate: fullUser.availableToDonate !== undefined ? fullUser.availableToDonate : true,
+              showPhoneNumber: fullUser.showPhoneNumber !== undefined ? fullUser.showPhoneNumber : true,
+              anonymousMode: fullUser.anonymousMode !== undefined ? fullUser.anonymousMode : false
+            });
+            // Also update localStorage
+            localStorage.setItem('privacySettings', JSON.stringify({
+              availableToDonate: fullUser.availableToDonate !== undefined ? fullUser.availableToDonate : true,
+              showPhoneNumber: fullUser.showPhoneNumber !== undefined ? fullUser.showPhoneNumber : true,
+              anonymousMode: fullUser.anonymousMode !== undefined ? fullUser.anonymousMode : false
+            }));
+          }
         } else if (profileResponse && !profileResponse.success) {
           console.warn('Profile API call failed, using localStorage data');
         }
@@ -250,11 +297,12 @@ const UserDashboard = () => {
           }
         }
 
-        // Load organizations - use currentUserData or user
+        // Load organizations - prefer ZIP code, fallback to city (default view: user's own ZIP)
+        const zipForOrgs = currentUserData?.zipCode || user?.zipCode;
         const cityForOrgs = currentUserData?.city || user?.city;
-        if (cityForOrgs) {
+        if (zipForOrgs || cityForOrgs) {
           try {
-            const orgsResponse = await organizationAPI.getAllOrganizations(cityForOrgs);
+            const orgsResponse = await organizationAPI.getAllOrganizations(cityForOrgs, zipForOrgs);
             if (orgsResponse?.success) {
               setOrganizations(orgsResponse.organizations || []);
             }
@@ -308,6 +356,79 @@ const UserDashboard = () => {
     };
   }, [navigate]);
 
+  // Apply theme to document
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    
+    if (theme === 'dark') {
+      root.classList.add('dark-mode');
+      body.classList.add('dark-mode');
+    } else {
+      root.classList.remove('dark-mode');
+      body.classList.remove('dark-mode');
+    }
+    
+    // Store theme preference in localStorage
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  // Toggle theme function
+  const handleThemeToggle = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
+  // Handle availability status toggle
+  const handleAvailabilityToggle = async () => {
+    const updated = {
+      ...privacySettings,
+      availableToDonate: !privacySettings.availableToDonate
+    };
+    setPrivacySettings(updated);
+    localStorage.setItem('privacySettings', JSON.stringify(updated));
+    
+    // Sync with backend
+    try {
+      await userAPI.updatePrivacySettings({ availableToDonate: updated.availableToDonate });
+    } catch (error) {
+      console.error('Failed to update privacy settings:', error);
+    }
+  };
+
+  // Handle phone visibility toggle
+  const handlePhoneVisibilityChange = async (showPhone) => {
+    const updated = {
+      ...privacySettings,
+      showPhoneNumber: showPhone
+    };
+    setPrivacySettings(updated);
+    localStorage.setItem('privacySettings', JSON.stringify(updated));
+    
+    // Sync with backend
+    try {
+      await userAPI.updatePrivacySettings({ showPhoneNumber: showPhone });
+    } catch (error) {
+      console.error('Failed to update privacy settings:', error);
+    }
+  };
+
+  // Handle anonymous mode toggle
+  const handleAnonymousModeToggle = async () => {
+    const updated = {
+      ...privacySettings,
+      anonymousMode: !privacySettings.anonymousMode
+    };
+    setPrivacySettings(updated);
+    localStorage.setItem('privacySettings', JSON.stringify(updated));
+    
+    // Sync with backend
+    try {
+      await userAPI.updatePrivacySettings({ anonymousMode: updated.anonymousMode });
+    } catch (error) {
+      console.error('Failed to update privacy settings:', error);
+    }
+  };
+
   // Helper function to refresh request data
   const refreshRequestData = async () => {
     const user = currentUser || getCurrentUser();
@@ -353,9 +474,11 @@ const UserDashboard = () => {
       const urgentResponse = await requestAPI.getAllRequests({ city });
       
       if (urgentResponse.success && urgentResponse.requests) {
-        // Filter for urgent/emergency and exclude user's own requests (backend should do this, but double-check)
+        // Filter for urgent/emergency and exclude user's own requests and cancelled/deleted
+        // Note: Deleted requests won't be in the response, but we filter cancelled just in case
         const filtered = urgentResponse.requests.filter(
-          req => req.userId !== user.id && 
+          req => req && // Ensure request exists (not deleted)
+                 req.userId !== user.id && 
                  req.status !== 'fulfilled' && 
                  req.status !== 'cancelled' &&
                  (req.urgency === 'emergency' || req.urgency === 'urgent')
@@ -418,13 +541,13 @@ const UserDashboard = () => {
         const now = new Date();
         const relevantEvents = (eventsResponse.events || [])
           .filter(event => {
-            const eventDate = new Date(event.date);
+            const eventDate = new Date(event.eventDate || event.date);
             eventDate.setHours(0, 0, 0, 0);
             const today = new Date(now);
             today.setHours(0, 0, 0, 0);
             return eventDate >= today;
           })
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
+          .sort((a, b) => new Date(a.eventDate || a.date) - new Date(b.eventDate || b.date));
         setEvents(relevantEvents);
       }
     } catch (error) {
@@ -815,8 +938,11 @@ const UserDashboard = () => {
 
   const activeDonation = getActiveDonation();
   const upcomingDonation = getUpcomingDonation();
-  const unreadMessagesCount = messages.filter(m => !m.read).length;
-  const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+
+  // Handle finding nearest organization - switch to organizations tab
+  const handleFindNearest = () => {
+    setActiveTab('organizations');
+  };
   // Calculate donation count from actual donations array
   // Only count 'completed' donations - donations are only counted after customer actually shows up and donates
   // 'approved' and 'scheduled' are just appointments, not actual donations yet
@@ -1000,6 +1126,54 @@ const UserDashboard = () => {
 
   const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
+  // Load user testimonials
+  const loadTestimonials = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const response = await testimonialAPI.getUserTestimonials(currentUser.id);
+      if (response.success) {
+        setTestimonials(response.testimonials || []);
+      }
+    } catch (error) {
+      console.error('Error loading testimonials:', error);
+    }
+  };
+
+  // Handle testimonial form submission
+  const handleTestimonialSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!testimonialForm.message.trim() || !testimonialForm.authorName.trim()) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    setSubmittingTestimonial(true);
+    try {
+      const response = await testimonialAPI.createTestimonial({
+        message: testimonialForm.message,
+        authorName: testimonialForm.authorName,
+        authorRole: testimonialForm.authorRole,
+        userType: testimonialForm.userType
+      });
+
+      if (response.success) {
+        setTestimonialForm({
+          message: '',
+          authorName: '',
+          authorRole: 'Regular Donor',
+          userType: 'donor'
+        });
+        alert('Thank you! Your testimonial has been submitted and will be reviewed before being published.');
+        loadTestimonials();
+      }
+    } catch (error) {
+      alert(error.message || 'Failed to submit testimonial. Please try again.');
+    } finally {
+      setSubmittingTestimonial(false);
+    }
+  };
+
   // Show loading state if we don't have at least basic user info
   // But use currentUser as fallback if userData isn't available yet
   if (!currentUser) {
@@ -1030,7 +1204,7 @@ const UserDashboard = () => {
   };
 
   return (
-    <div className="user-dashboard">
+    <div className={`user-dashboard ${theme === 'dark' ? 'dark-mode' : ''}`}>
       <Navbar />
       {/* Header */}
       <div className="dashboard-header">
@@ -1041,6 +1215,16 @@ const UserDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Dashboard top notifications (only last 24 hours) */}
+      {activeTab === 'dashboard' && (
+        <NotificationList
+          mode="banner"
+          maxAgeHours={24}
+          onUnreadCountChange={setUnreadNotificationsCount}
+          onNotificationUpdate={refreshRequestData}
+        />
+      )}
 
       {/* Stats Cards */}
       <div className="stats-grid">
@@ -1056,14 +1240,14 @@ const UserDashboard = () => {
           </div>
         </div>
         <div 
-          className="stat-card clickable" 
-          onClick={() => setActiveTab('messages')}
+          className="stat-card find-organization-card clickable" 
+          onClick={handleFindNearest}
           style={{ cursor: 'pointer' }}
         >
-          <div className="stat-icon">📬</div>
+          <div className="stat-icon">📍</div>
           <div className="stat-content">
-            <h3>{unreadMessagesCount}</h3>
-            <p>Unread Messages</p>
+            <h3>Find Organization</h3>
+            <p>Locate nearest</p>
           </div>
         </div>
         <div 
@@ -1164,27 +1348,83 @@ const UserDashboard = () => {
                 </div>
               ) : (
                 <div className="urgent-requests-grid">
-                  {urgentRequests.map(request => (
-                    <div key={request.id} className="urgent-request-card">
-                      <div className="urgency-badge">{request.urgency === 'emergency' ? '🚨 Emergency' : '⚠️ Urgent'}</div>
-                      <div className="request-details">
-                        <h3>{request.bloodGroup} Blood Needed</h3>
-                        <p><strong>Hospital:</strong> {request.hospitalName}</p>
-                        <p><strong>Location:</strong> {request.city}, {request.state}</p>
-                        <p><strong>Units:</strong> {request.unitsRequired}</p>
-                        <p><strong>Required Date:</strong> {new Date(request.requiredDate).toLocaleDateString()}</p>
-                        {request.patientCondition && (
-                          <p><strong>Condition:</strong> {request.patientCondition}</p>
+                  {urgentRequests.map(request => {
+                    // Check if user's blood group is compatible with requested blood group
+                    // Based on official blood compatibility: Can RECEIVE Blood From
+                    const userBloodGroup = userData?.bloodGroup || currentUser?.bloodGroup;
+                    const isCompatible = userBloodGroup && (() => {
+                      const compatibilityMap = {
+                        // O- can only receive from O-
+                        'O-': ['O-'],
+                        // O+ can receive from O+, O-
+                        'O+': ['O+', 'O-'],
+                        // A- can receive from A-, O-
+                        'A-': ['A-', 'O-'],
+                        // A+ can receive from A+, A-, O+, O-
+                        'A+': ['A+', 'A-', 'O+', 'O-'],
+                        // B- can receive from B-, O-
+                        'B-': ['B-', 'O-'],
+                        // B+ can receive from B+, B-, O+, O-
+                        'B+': ['B+', 'B-', 'O+', 'O-'],
+                        // AB- can receive from AB-, A-, B-, O-
+                        'AB-': ['AB-', 'A-', 'B-', 'O-'],
+                        // AB+ can receive from everyone (Universal Recipient)
+                        'AB+': ['AB+', 'AB-', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-']
+                      };
+                      const compatibleGroups = compatibilityMap[request.bloodGroup] || [];
+                      return compatibleGroups.includes(userBloodGroup);
+                    })();
+                    
+                    return (
+                      <div key={request.id} className="urgent-request-card">
+                        <div className="urgency-badge">{request.urgency === 'emergency' ? '🚨 Emergency' : '⚠️ Urgent'}</div>
+                        <div className="request-details">
+                          <h3>{request.bloodGroup} Blood Needed</h3>
+                          <p><strong>Hospital:</strong> {request.hospitalName}</p>
+                          <p><strong>Location:</strong> {request.city}, {request.state}</p>
+                          <p><strong>Units:</strong> {request.unitsRequired}</p>
+                          <p><strong>Required Date:</strong> {request.requiredDate ? (() => {
+                            const dateStr = request.requiredDate.split('T')[0]; // Get date part only
+                            const [year, month, day] = dateStr.split('-');
+                            return `${month}/${day}/${year}`;
+                          })() : 'N/A'}</p>
+                          {request.patientCondition && (
+                            <p><strong>Condition:</strong> {request.patientCondition}</p>
+                          )}
+                        </div>
+                        {isCompatible ? (
+                          <button 
+                            className="btn-accept"
+                            onClick={() => handleAcceptUrgentRequest(request.id)}
+                          >
+                            I'm Ready to Donate
+                          </button>
+                        ) : (
+                          <button 
+                            className="btn-share"
+                            onClick={() => {
+                              // Create a share notification object for the ShareCard component
+                              const shareNotification = {
+                                id: null,
+                                type: 'SHARE_REQUEST',
+                                title: `📢 Help Needed: ${request.bloodGroup} Blood Shortage in ${request.city}`,
+                                message: `We have an urgent request for ${request.bloodGroup} blood in ${request.city}, ${request.state || ''}. Do you know anyone? Click to share.`,
+                                referenceId: request.id,
+                                isCompatible: false,
+                                isSameLocation: true,
+                                isRead: false
+                              };
+                              // Trigger share card - we'll need to import ShareCard and add state
+                              setSelectedNotification(shareNotification);
+                              setShowShareCard(true);
+                            }}
+                          >
+                            📢 Share Request
+                          </button>
                         )}
                       </div>
-                      <button 
-                        className="btn-accept"
-                        onClick={() => handleAcceptUrgentRequest(request.id)}
-                      >
-                        I'm Ready to Donate
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1215,6 +1455,11 @@ const UserDashboard = () => {
                   <div className="action-icon">📋</div>
                   <h3>Manage Appointments</h3>
                   <p>Reschedule or cancel</p>
+                </div>
+                <div className="action-card" onClick={() => setActiveTab('testimonials')}>
+                  <div className="action-icon">💬</div>
+                  <h3>Share Your Story</h3>
+                  <p>Write a testimonial</p>
                 </div>
               </div>
             </div>
@@ -1471,8 +1716,38 @@ const UserDashboard = () => {
 
         {activeTab === 'events' && (
           <div className="events-content">
-            <h2>Upcoming Blood Donation Events Near You</h2>
-            {events.length === 0 ? (
+            <div className="events-header">
+              <h2>Upcoming Blood Donation Events Near You</h2>
+              <div className="events-view-toggle">
+                <button
+                  className={`view-toggle-btn ${eventsViewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setEventsViewMode('list')}
+                >
+                  📋 List
+                </button>
+                <button
+                  className={`view-toggle-btn ${eventsViewMode === 'calendar' ? 'active' : ''}`}
+                  onClick={() => setEventsViewMode('calendar')}
+                >
+                  📅 Calendar
+                </button>
+              </div>
+            </div>
+            {eventsViewMode === 'calendar' ? (
+              <EventCalendar
+                userCity={displayUserData.city}
+                onEventClick={(event) => {
+                  const params = new URLSearchParams({
+                    event: event.id,
+                    eventName: event.name,
+                    eventDate: event.eventDate,
+                    eventEndDate: event.eventEndDate || '',
+                    isMultiDay: event.isMultiDay ? 'true' : 'false'
+                  });
+                  navigate(`/donate?${params.toString()}`);
+                }}
+              />
+            ) : events.length === 0 ? (
               <div className="empty-state">
                 <p>No upcoming events in your city at the moment.</p>
                 <p style={{ marginTop: '10px', fontSize: '0.9rem', color: '#6c757d' }}>
@@ -1506,22 +1781,27 @@ const UserDashboard = () => {
                     return `${formattedDate}${startTime && endTime ? `, ${startTime} - ${endTime}` : ''}`;
                   };
 
+                  const eventDate = event.eventDate || event.date;
+                  const isFull = event.isFull || false;
+                  const spotsRemaining = event.spotsRemaining;
+                  
                   const getEventLink = () => {
                     const params = new URLSearchParams({
                       event: event.id,
                       eventName: event.name,
-                      eventDate: event.date,
-                      isMultiDay: 'false'
+                      eventDate: eventDate,
+                      eventEndDate: event.eventEndDate || '',
+                      isMultiDay: event.isMultiDay ? 'true' : 'false'
                     });
                     return `/donate?${params.toString()}`;
                   };
-
+                  
                   return (
                     <div key={event.id} className="event-card">
-                      <div className="event-badge">{getEventBadge(event.date)}</div>
+                      <div className="event-badge">{getEventBadge(eventDate)}</div>
                       <h3>{event.name}</h3>
                       <p className="event-meta">
-                        📍 {event.location} • 🗓️ {formatEventDate(event.date, event.startTime, event.endTime)}
+                        📍 {event.locationAddress || event.location} • 🗓️ {formatEventDate(eventDate, event.startTime, event.endTime)}
                       </p>
                       {event.description && (
                         <p className="event-desc">{event.description}</p>
@@ -1529,13 +1809,35 @@ const UserDashboard = () => {
                       {!event.description && (
                         <p className="event-desc">Join us for this blood donation event. Help save lives!</p>
                       )}
-                      {event.orgName && (
+                      {event.organization && (
                         <p className="event-org" style={{ fontSize: '0.9rem', color: '#6c757d', marginTop: '8px' }}>
-                          <strong>Organized by:</strong> {event.orgName}
+                          <strong>Organized by:</strong> {event.organization.name || event.orgName}
                         </p>
                       )}
-                      <Link to={getEventLink()} className="btn btn-primary">
-                        Register to Donate
+                      {event.maxRegistrations && (
+                        <p className="event-registrations" style={{ 
+                          fontSize: '0.9rem', 
+                          color: isFull ? '#dc2626' : '#059669',
+                          fontWeight: '600',
+                          marginTop: '8px'
+                        }}>
+                          {event.registrationCount || 0} / {event.maxRegistrations} registered
+                          {isFull && ' (FULL)'}
+                          {spotsRemaining !== null && spotsRemaining > 0 && !isFull && 
+                            ` (${spotsRemaining} spots remaining)`}
+                        </p>
+                      )}
+                      <Link 
+                        to={getEventLink()} 
+                        className={`btn btn-primary ${isFull ? 'disabled' : ''}`}
+                        onClick={(e) => {
+                          if (isFull) {
+                            e.preventDefault();
+                            alert('This event is full. Please choose another event.');
+                          }
+                        }}
+                      >
+                        {isFull ? 'Event Full' : 'Register to Donate'}
                       </Link>
                     </div>
                   );
@@ -1587,36 +1889,66 @@ const UserDashboard = () => {
 
         {activeTab === 'notifications' && (
           <div className="notifications-content">
-            <h2>Notifications</h2>
-            {notifications.length === 0 ? (
-              <div className="empty-state">
-                <p>You have no notifications.</p>
-              </div>
-            ) : (
-              <div className="notifications-list">
-                {notifications.map(notification => (
-                  <div key={notification.id} className={`notification-item ${!notification.read ? 'unread' : ''}`}>
-                    <div className="notification-icon">
-                      {notification.type === 'precaution_24hr_after' ? '⚠️' : 
-                       notification.type === 'donor_ready' ? '✅' : '🔔'}
-                    </div>
-                    <div className="notification-content">
-                      <h3>{notification.title}</h3>
-                      <p>{notification.message}</p>
-                      <span className="notification-date">
-                        {new Date(notification.createdAt || notification.id).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <NotificationList
+              mode="full"
+              onUnreadCountChange={setUnreadNotificationsCount}
+              onNotificationUpdate={refreshRequestData}
+            />
           </div>
         )}
 
         {activeTab === 'organizations' && (
           <div className="organizations-content">
             <h2>Organizations Near You</h2>
+            <div className="organizations-search">
+              <input
+                type="text"
+                placeholder="Search by name, city, or ZIP code"
+                value={organizationSearch}
+                onChange={(e) => setOrganizationSearch(e.target.value)}
+              />
+              <button
+                className="btn-search"
+                onClick={async () => {
+                  try {
+                    const searchTerm = organizationSearch.trim();
+                    const response = await organizationAPI.getAllOrganizations(
+                      null,
+                      null,
+                      searchTerm || null
+                    );
+                    if (response?.success) {
+                      setOrganizations(response.organizations || []);
+                    }
+                  } catch (error) {
+                    console.error('Error searching organizations:', error);
+                  }
+                }}
+              >
+                Search
+              </button>
+              <button
+                className="btn-reset"
+                onClick={async () => {
+                  try {
+                    const zipForOrgs = userData?.zipCode || currentUser?.zipCode;
+                    const cityForOrgs = userData?.city || currentUser?.city;
+                    const response = await organizationAPI.getAllOrganizations(
+                      cityForOrgs,
+                      zipForOrgs
+                    );
+                    if (response?.success) {
+                      setOrganizations(response.organizations || []);
+                    }
+                    setOrganizationSearch('');
+                  } catch (error) {
+                    console.error('Error resetting organizations search:', error);
+                  }
+                }}
+              >
+                Reset to My ZIP
+              </button>
+            </div>
             {organizations.length === 0 ? (
               <div className="empty-state">
                 <p>No organizations found in your area.</p>
@@ -1636,13 +1968,13 @@ const UserDashboard = () => {
                       <div className="org-header">
                         <h3>{org.name}</h3>
                         <div className="org-rating">
-                          <span className="stars">{'⭐'.repeat(Math.floor(org.rating))}</span>
-                          <span className="rating-text">{org.rating.toFixed(1)} ({org.reviewCount} reviews)</span>
+                          <span className="stars">{'⭐'.repeat(Math.floor(org.rating || 0))}</span>
+                          <span className="rating-text">{(org.rating || 0).toFixed(1)} ({org.reviewCount || 0} reviews)</span>
                         </div>
                       </div>
-                      <p className="org-specialty"><strong>Specialty:</strong> {org.specialty}</p>
-                      <p className="org-location">📍 {org.address}, {org.city}, {org.state}</p>
-                      <p className="org-phone">📞 {org.phone}</p>
+                      <p className="org-specialty"><strong>Specialty:</strong> {org.specialty || 'N/A'}</p>
+                      <p className="org-location">📍 {org.address || ''}, {org.city || ''}, {org.state || ''}</p>
+                      <p className="org-phone">📞 {org.phone || 'N/A'}</p>
                       {canReview && (
                         <button 
                           className="btn-review"
@@ -1656,6 +1988,222 @@ const UserDashboard = () => {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="settings-content">
+            <h2>Settings</h2>
+            <div className="settings-section">
+              <div className="setting-item">
+                <div className="setting-info">
+                  <h3>Appearance</h3>
+                  <p>Choose between light and dark mode</p>
+                </div>
+                <div className="setting-control">
+                  <label className="theme-toggle">
+                    <input
+                      type="checkbox"
+                      checked={theme === 'dark'}
+                      onChange={handleThemeToggle}
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-label">
+                      {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Profile & Privacy Section */}
+              <div className="settings-subsection">
+                <h3 className="subsection-title">Profile & Privacy</h3>
+                
+                {/* Availability Status */}
+                <div className="setting-item">
+                  <div className="setting-info">
+                    <h3>Availability Status</h3>
+                    <p>Toggle OFF if you just donated or are on medication to avoid donation matches</p>
+                  </div>
+                  <div className="setting-control">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.availableToDonate}
+                        onChange={handleAvailabilityToggle}
+                      />
+                      <span className="toggle-slider"></span>
+                      <span className="toggle-label">
+                        {privacySettings.availableToDonate ? 'Available to Donate' : 'Not Available'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Phone Visibility */}
+                <div className="setting-item">
+                  <div className="setting-info">
+                    <h3>Contact Visibility</h3>
+                    <p>Choose how organizations can contact you</p>
+                  </div>
+                  <div className="setting-control">
+                    <div className="radio-group">
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="phoneVisibility"
+                          checked={privacySettings.showPhoneNumber}
+                          onChange={() => handlePhoneVisibilityChange(true)}
+                        />
+                        <span className="radio-label">Allow organizations to see my phone number</span>
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="phoneVisibility"
+                          checked={!privacySettings.showPhoneNumber}
+                          onChange={() => handlePhoneVisibilityChange(false)}
+                        />
+                        <span className="radio-label">Contact me via app only</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Anonymous Mode */}
+                <div className="setting-item">
+                  <div className="setting-info">
+                    <h3>Anonymous Mode</h3>
+                    <p>Hide your name from public leaderboards and rankings</p>
+                  </div>
+                  <div className="setting-control">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={privacySettings.anonymousMode}
+                        onChange={handleAnonymousModeToggle}
+                      />
+                      <span className="toggle-slider"></span>
+                      <span className="toggle-label">
+                        {privacySettings.anonymousMode ? 'Anonymous' : 'Public'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'testimonials' && (
+          <div className="testimonials-content">
+            <h2>Share Your Story</h2>
+            <p style={{ marginBottom: '20px', color: '#6c757d' }}>
+              Share your experience with blood donation or receiving blood. Your story can inspire others!
+            </p>
+
+            <form className="testimonial-form" onSubmit={handleTestimonialSubmit}>
+              <div className="form-group">
+                <label htmlFor="authorName">Your Name *</label>
+                <input
+                  type="text"
+                  id="authorName"
+                  value={testimonialForm.authorName}
+                  onChange={(e) => setTestimonialForm({ ...testimonialForm, authorName: e.target.value })}
+                  placeholder="e.g., John Doe"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="authorRole">Your Role *</label>
+                <select
+                  id="authorRole"
+                  value={testimonialForm.authorRole}
+                  onChange={(e) => {
+                    const role = e.target.value;
+                    setTestimonialForm({
+                      ...testimonialForm,
+                      authorRole: role,
+                      userType: role === 'Family Member' ? 'family_member' : 
+                               role === 'Regular Donor' ? 'donor' : 'requestor'
+                    });
+                  }}
+                  required
+                >
+                  <option value="Regular Donor">Regular Donor</option>
+                  <option value="Family Member">Family Member</option>
+                  <option value="Requestor">Requestor</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="message">Your Story *</label>
+                <textarea
+                  id="message"
+                  value={testimonialForm.message}
+                  onChange={(e) => setTestimonialForm({ ...testimonialForm, message: e.target.value })}
+                  placeholder="Share your experience... (max 500 characters)"
+                  rows="6"
+                  maxLength={500}
+                  required
+                />
+                <small style={{ color: '#6c757d' }}>
+                  {testimonialForm.message.length}/500 characters
+                </small>
+              </div>
+
+              <button type="submit" className="btn-primary" disabled={submittingTestimonial}>
+                {submittingTestimonial ? 'Submitting...' : 'Submit Testimonial'}
+              </button>
+            </form>
+
+            <div className="my-testimonials" style={{ marginTop: '40px' }}>
+              <h3>My Testimonials</h3>
+              {testimonials.length === 0 ? (
+                <div className="empty-state">
+                  <p>You haven't submitted any testimonials yet.</p>
+                </div>
+              ) : (
+                <div className="testimonials-list">
+                  {testimonials.map(testimonial => (
+                    <div key={testimonial.id} className="testimonial-item">
+                      <div className="testimonial-status">
+                        <span className={`status-badge ${testimonial.status}`}>
+                          {testimonial.status === 'approved' ? '✅ Approved' :
+                           testimonial.status === 'pending' ? '⏳ Pending Review' :
+                           '❌ Rejected'}
+                        </span>
+                        {testimonial.isFeatured && <span className="featured-badge">⭐ Featured</span>}
+                      </div>
+                      <p className="testimonial-message">"{testimonial.message}"</p>
+                      <div className="testimonial-meta">
+                        <strong>{testimonial.authorName}</strong> - {testimonial.authorRole}
+                      </div>
+                      <div className="testimonial-actions">
+                        {testimonial.status === 'pending' && (
+                          <button
+                            className="btn-delete"
+                            onClick={async () => {
+                              if (window.confirm('Are you sure you want to delete this testimonial?')) {
+                                try {
+                                  await testimonialAPI.deleteTestimonial(testimonial.id);
+                                  loadTestimonials();
+                                } catch (error) {
+                                  alert(error.message || 'Failed to delete testimonial.');
+                                }
+                              }
+                            }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2336,6 +2884,17 @@ const UserDashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Share Card Modal */}
+      {showShareCard && selectedNotification && (
+        <ShareCard
+          notification={selectedNotification}
+          onClose={() => {
+            setShowShareCard(false);
+            setSelectedNotification(null);
+          }}
+        />
       )}
     </div>
   );

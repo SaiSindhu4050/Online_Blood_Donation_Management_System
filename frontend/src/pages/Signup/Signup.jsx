@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { setAuthToken } from '../../utils/storage';
 import { authAPI } from '../../utils/api';
@@ -25,9 +25,40 @@ const Signup = () => {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const formContainerRef = useRef(null);
 
   const searchParams = new URLSearchParams(location.search);
   const userType = searchParams.get('type');
+
+  // Reset scroll position on mount for laptop screens
+  useEffect(() => {
+    const resetScroll = () => {
+      const container = formContainerRef.current;
+      if (container) {
+        container.scrollTop = 0;
+      }
+    };
+    
+    // Reset immediately
+    resetScroll();
+    
+    // Reset after DOM is ready
+    setTimeout(resetScroll, 0);
+    
+    // Reset after a short delay
+    setTimeout(resetScroll, 10);
+    setTimeout(resetScroll, 50);
+    setTimeout(resetScroll, 100);
+    
+    // Reset after layout is complete (double RAF ensures layout is done)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resetScroll();
+        // One more reset after a brief delay
+        setTimeout(resetScroll, 10);
+      });
+    });
+  }, []);
   
   // If on /signup (not /signup/form) or no type selected, show Landing selection
   if (location.pathname === '/signup' || !userType) {
@@ -231,7 +262,7 @@ const Signup = () => {
           </div>
         </div>
 
-        <div className="signup-right">
+        <div className="signup-right" ref={formContainerRef}>
           <div className="signup-form-container">
             <div className="signup-header">
               <h2>Create Account</h2>

@@ -3,7 +3,8 @@ const router = express.Router();
 const {
   getProfile,
   updateProfile,
-  getDashboard
+  getDashboard,
+  updatePrivacySettings
 } = require('../controllers/user.controller');
 const { protect, isUser } = require('../middleware/auth.middleware');
 
@@ -14,6 +15,7 @@ router.use(isUser);
 router.get('/profile', getProfile);
 router.put('/profile', updateProfile);
 router.get('/dashboard', getDashboard);
+router.put('/privacy-settings', updatePrivacySettings);
 
 module.exports = router;
 

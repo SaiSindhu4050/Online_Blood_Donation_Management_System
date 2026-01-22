@@ -11,6 +11,9 @@ import UserDashboard from './pages/UserDashboard/UserDashboard';
 import OrganizationLogin from './pages/OrganizationLogin/OrganizationLogin';
 import OrganizationSignup from './pages/OrganizationSignup/OrganizationSignup';
 import OrganizationDashboard from './pages/OrganizationDashboard/OrganizationDashboard';
+import ShareRequest from './pages/ShareRequest/ShareRequest';
+import AdminLogin from './pages/AdminLogin/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import './App.css';
 
 function App() {
@@ -31,6 +34,9 @@ function App() {
             <Route path="/org-login" element={<OrganizationLogin />} />
             <Route path="/org-signup" element={<OrganizationSignup />} />
             <Route path="/org-dashboard" element={<OrganizationDashboard />} />
+            <Route path="/share/request/:id" element={<ShareRequest />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
           </Routes>
         </main>
       </div>

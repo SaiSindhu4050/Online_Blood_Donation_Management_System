@@ -1,4 +1,4 @@
-const { Donation, User, Event, DonationRescheduleRequest, Organization, Notification, BloodInventory } = require('../models');
+const { Donation, User, Event, DonationRescheduleRequest, Organization, Notification } = require('../models');
 const { Op } = require('sequelize');
 
 // @desc    Create a new donation
@@ -20,11 +20,98 @@ exports.createDonation = async (req, res) => {
       }
     }
 
+    // Check max registrations if donation is for an event
+    if (req.body.eventId) {
+      const event = await Event.findByPk(req.body.eventId);
+      
+      if (!event) {
+        return res.status(404).json({
+          message: 'Event not found'
+        });
+      }
+
+      // Check if event is cancelled
+      if (event.status === 'cancelled') {
+        return res.status(400).json({
+          message: 'This event has been cancelled'
+        });
+      }
+
+      // Check pre-screening requirement
+      if (event.requiresPreScreening) {
+        const { PreScreeningResponse } = require('../models');
+        const userId = req.user && req.userType === 'user' ? req.user.id : null;
+        const userEmail = req.user && req.userType === 'user' ? req.user.email : req.body.email;
+
+        // Check if user has completed pre-screening
+        const preScreeningResponse = await PreScreeningResponse.findOne({
+          where: {
+            eventId: event.id,
+            [Op.or]: [
+              { userId: userId },
+              { userEmail: userEmail }
+            ]
+          },
+          order: [['respondedAt', 'DESC']]
+        });
+
+        if (!preScreeningResponse) {
+          return res.status(400).json({
+            message: 'Pre-screening is required for this event. Please complete the pre-screening questionnaire first.',
+            requiresPreScreening: true,
+            eventId: event.id
+          });
+        }
+
+        // Check if user is eligible
+        if (!preScreeningResponse.isEligible && event.autoRejectIneligible) {
+          return res.status(400).json({
+            message: 'You are not eligible to participate in this event based on your pre-screening responses.'
+          });
+        }
+      }
+
+      if (event.maxRegistrations !== null && event.maxRegistrations > 0) {
+        // Count existing registrations (pending, approved, scheduled)
+        const registrationCount = await Donation.count({
+          where: {
+            eventId: event.id,
+            status: { [Op.in]: ['pending', 'approved', 'scheduled'] }
+          }
+        });
+
+        if (registrationCount >= event.maxRegistrations) {
+          return res.status(400).json({
+            message: `This event has reached its maximum registration limit of ${event.maxRegistrations}. Please choose another event or contact the organization.`
+          });
+        }
+      }
+    }
+
     const donation = await Donation.create({
       ...req.body,
       userId: req.user && req.userType === 'user' ? req.user.id : null,
       userEmail: req.user && req.userType === 'user' ? req.user.email : req.body.email
     });
+
+    // If donation is for an event, process waitlist if event was full
+    if (donation.eventId) {
+      const { EventWaitlist, Notification } = require('../models');
+      const event = await Event.findByPk(donation.eventId);
+      
+      if (event && event.maxRegistrations) {
+        const registrationCount = await Donation.count({
+          where: {
+            eventId: event.id,
+            status: { [Op.in]: ['pending', 'approved', 'scheduled'] }
+          }
+        });
+
+        // If event is still full after this registration, no need to process waitlist
+        // But if it was full before and now has space, process waitlist
+        // This will be handled when donations are cancelled
+      }
+    }
 
     res.status(201).json({ success: true, donation });
   } catch (error) {
@@ -268,12 +355,64 @@ exports.updateDonationStatus = async (req, res) => {
       }
     }
 
+    const oldStatus = donation.status;
     await donation.update({
       status: status || donation.status,
       scheduledDate: finalScheduledDate,
       scheduledTime: finalScheduledTime,
       eventDate: finalEventDate || donation.eventDate
     });
+
+    // Process waitlist if donation was cancelled and event is full
+    if (oldStatus !== 'cancelled' && (status === 'cancelled' || donation.status === 'cancelled')) {
+      if (donation.eventId) {
+        const { EventWaitlist, Notification } = require('../models');
+        const event = await Event.findByPk(donation.eventId);
+        
+        if (event && event.maxRegistrations) {
+          const registrationCount = await Donation.count({
+            where: {
+              eventId: event.id,
+              status: { [Op.in]: ['pending', 'approved', 'scheduled'] }
+            }
+          });
+
+          const spotsAvailable = event.maxRegistrations - registrationCount;
+          if (spotsAvailable > 0) {
+            // Get next users from waitlist
+            const nextWaitlistEntries = await EventWaitlist.findAll({
+              where: {
+                eventId: event.id,
+                status: 'waiting'
+              },
+              order: [
+                ['priority', 'DESC'],
+                ['createdAt', 'ASC']
+              ],
+              limit: spotsAvailable
+            });
+
+            for (const entry of nextWaitlistEntries) {
+              if (entry.userId) {
+                await Notification.create({
+                  userId: entry.userId,
+                  type: 'EVENT_WAITLIST_SPOT_AVAILABLE',
+                  title: `🎉 Spot Available: ${event.name}`,
+                  message: `A spot has opened up for ${event.name} on ${new Date(event.eventDate).toLocaleDateString()}. Click to register now!`,
+                  isRead: false,
+                  referenceId: event.id
+                });
+              }
+
+              await entry.update({
+                status: 'notified',
+                notifiedAt: new Date()
+              });
+            }
+          }
+        }
+      }
+    }
 
     // Update user's last donation date ONLY when donation is completed
     // 'approved' status is just an appointment - customer hasn't shown up yet
@@ -553,89 +692,8 @@ exports.markDonationCompleted = async (req, res) => {
       );
     }
 
-    // Add blood to inventory
-    try {
-      // Get organization from donation
-      let organization = null;
-      if (donation.selectedOrganization) {
-        organization = await Organization.findOne({
-          where: { name: donation.selectedOrganization }
-        });
-      } else if (donation.event && donation.event.organization) {
-        // Get organization from event (already loaded in include)
-        organization = donation.event.organization;
-      } else if (donation.eventId) {
-        // Fallback: Load event with organization if not already loaded
-        const event = await Event.findByPk(donation.eventId, {
-          include: [{ model: Organization, as: 'organization' }]
-        });
-        if (event && event.organization) {
-          organization = event.organization;
-        }
-      }
-
-      // If organization found, add to inventory
-      if (organization) {
-        // Check if there's already an inventory record for this donation
-        let inventoryRecord = await BloodInventory.findOne({
-          where: { donationId: donation.id }
-        });
-
-        if (inventoryRecord) {
-          // If exists, activate it (in case it was created but not activated)
-          await inventoryRecord.update({
-            status: 'active'
-          });
-        } else {
-          // Create new inventory record
-          // Use default values: 1 unit, Whole Blood (since donationType/units not stored in donation model)
-          const donationType = 'Whole Blood';
-          const units = 1;
-          
-          // Calculate expiration date based on donation type
-          const today = new Date();
-          let daysToExpire = 42; // Default for Whole Blood
-          
-          // Note: Since we don't have donationType stored, we use default
-          // In future, could store donationType/units when approving, or require it when marking completed
-          
-          today.setDate(today.getDate() + daysToExpire);
-          const expirationDate = today.toISOString().split('T')[0];
-
-          // Check if inventory item with same blood group, type, and expiration exists
-          const existingInventory = await BloodInventory.findOne({
-            where: {
-              organizationId: organization.id,
-              bloodGroup: donation.bloodGroup,
-              donationType: donationType,
-              expirationDate: expirationDate,
-              status: 'active'
-            }
-          });
-
-          if (existingInventory) {
-            // Increment existing inventory
-            await existingInventory.update({
-              units: existingInventory.units + units
-            });
-          } else {
-            // Create new inventory record
-            await BloodInventory.create({
-              organizationId: organization.id,
-              donationId: donation.id,
-              bloodGroup: donation.bloodGroup,
-              donationType: donationType,
-              units: units,
-              expirationDate: expirationDate,
-              status: 'active'
-            });
-          }
-        }
-      }
-    } catch (inventoryError) {
-      console.error('Error adding to inventory:', inventoryError);
-      // Don't fail the request if inventory update fails, but log it
-    }
+    // Note: Inventory is automatically updated by the after_donation_completion trigger
+    // when donation status changes to 'completed'
 
     // Create notification for user
     if (donation.user) {

@@ -16,28 +16,33 @@ module.exports = (sequelize) => {
       }
     },
     type: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.ENUM('BLOOD_REQUEST', 'SHARE_REQUEST', 'REQUEST_ACCEPTED', 'CAMPAIGN', 'DONATION_COMPLETED', 'EVENT_REMINDER_24H', 'EVENT_REMINDER_2H', 'EVENT_WAITLIST_SPOT_AVAILABLE', 'EVENT_CHECKIN_CONFIRMED', 'EVENT_CANCELLED', 'EVENT_RESCHEDULED', 'PRE_SCREENING_REMINDER', 'PRE_SCREENING_COMPLETED', 'PRE_SCREENING_INELIGIBLE'),
       allowNull: false
     },
     title: {
-      type: DataTypes.STRING(255),
-      allowNull: false
+      type: DataTypes.STRING,
+      allowNull: true
     },
     message: {
       type: DataTypes.TEXT,
       allowNull: false
     },
-    read: {
+    isCompatible: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    isSameLocation: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    referenceId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Stores the RequestID or DonationID'
+    },
+    isRead: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
-    },
-    relatedId: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    relatedType: {
-      type: DataTypes.STRING(50),
-      allowNull: true
     }
   }, {
     tableName: 'notifications',

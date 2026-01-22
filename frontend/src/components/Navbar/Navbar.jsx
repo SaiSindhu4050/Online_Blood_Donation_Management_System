@@ -80,17 +80,6 @@ const Navbar = () => {
             >
               Dashboard
             </Link>
-            <button 
-              className="nav-link"
-              onClick={(e) => {
-                e.preventDefault();
-                setIsMenuOpen(false);
-                // This will be handled by UserDashboard component to switch tabs
-                window.dispatchEvent(new CustomEvent('switchTab', { detail: 'organizations' }));
-              }}
-            >
-              Organizations
-            </button>
             <div className="profile-dropdown-container" ref={profileDropdownRef}>
               <button 
                 className="profile-button"

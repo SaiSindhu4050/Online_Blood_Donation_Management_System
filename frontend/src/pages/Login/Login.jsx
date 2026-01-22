@@ -114,10 +114,33 @@ const Login = () => {
         }
 
         setIsLoading(false);
-        // Check if user type is user, redirect to dashboard
+        // Check if there's a redirect parameter (e.g., from event registration)
         const searchParams = new URLSearchParams(location.search);
+        const redirectPath = searchParams.get('redirect');
         const userType = searchParams.get('type');
-        if (userType === 'user') {
+        
+        if (redirectPath) {
+          // Build redirect URL with event parameters if they exist
+          const eventParams = new URLSearchParams();
+          const eventId = searchParams.get('event');
+          const eventName = searchParams.get('eventName');
+          const eventDate = searchParams.get('eventDate');
+          const eventEndDate = searchParams.get('eventEndDate');
+          const isMultiDay = searchParams.get('isMultiDay');
+          
+          if (eventId) {
+            eventParams.append('event', eventId);
+            if (eventName) eventParams.append('eventName', eventName);
+            if (eventDate) eventParams.append('eventDate', eventDate);
+            if (eventEndDate) eventParams.append('eventEndDate', eventEndDate);
+            if (isMultiDay) eventParams.append('isMultiDay', isMultiDay);
+          }
+          
+          const redirectUrl = eventParams.toString() 
+            ? `${redirectPath}?${eventParams.toString()}`
+            : redirectPath;
+          navigate(redirectUrl);
+        } else if (userType === 'user') {
           navigate('/dashboard');
         } else {
           navigate('/');
@@ -266,7 +289,7 @@ const Login = () => {
 
               <p className="signup-link">
                 Don't have an account?{' '}
-                <Link to="/signup">Sign up for free</Link>
+                <Link to="/signup/form?type=user">Sign up for free</Link>
               </p>
             </form>
           </div>

@@ -1,0 +1,17 @@
+-- Migration: Add waitlist and check-in notification types
+-- Adds EVENT_WAITLIST_SPOT_AVAILABLE and EVENT_CHECKIN_CONFIRMED to notifications type ENUM
+
+USE blood_donation_db;
+
+ALTER TABLE notifications
+MODIFY COLUMN type ENUM(
+  'BLOOD_REQUEST',
+  'SHARE_REQUEST',
+  'REQUEST_ACCEPTED',
+  'CAMPAIGN',
+  'DONATION_COMPLETED',
+  'EVENT_REMINDER_24H',
+  'EVENT_REMINDER_2H',
+  'EVENT_WAITLIST_SPOT_AVAILABLE',
+  'EVENT_CHECKIN_CONFIRMED'
+) NOT NULL;

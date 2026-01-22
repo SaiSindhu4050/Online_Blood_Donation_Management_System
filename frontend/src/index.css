@@ -12,6 +12,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  overflow-y: auto !important; /* Force vertical scrolling to work globally */
+  height: auto !important; /* Ensure height is not fixed */
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 code {
@@ -21,6 +25,19 @@ code {
 
 html {
   scroll-behavior: smooth;
+  overflow-y: auto !important; /* Force vertical scrolling to work globally */
+  overflow-x: hidden !important; /* Prevent horizontal scroll */
+  height: auto !important; /* Ensure height is not fixed */
+  max-height: none !important; /* Remove any max-height restrictions */
+}
+
+/* Additional override with higher specificity */
+html body,
+body html {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 /* Custom Scrollbar */

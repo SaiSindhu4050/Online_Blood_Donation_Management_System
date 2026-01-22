@@ -17,7 +17,8 @@ const Request = () => {
     urgency: '',
     hospitalName: '',
     hospitalAddress: '',
-    city: '',
+    hospitalCity: '', // Hospital city (for donor matching)
+    city: '', // Legacy field - kept for backward compatibility
     state: '',
     zipCode: '',
     requiredDate: '',
@@ -71,12 +72,69 @@ const Request = () => {
     loadUserData();
   }, [formData.requestType]);
 
+  // Hospital data lookup (you can expand this with actual hospital database)
+  const hospitalDatabase = {
+    // Example: Add more hospitals as needed
+    'rowan university hospital': { address: '201 Rowan Blvd, Glassboro', zipCode: '08028', city: 'edison' },
+    'jefferson hospital': { address: '111 S 11th St', zipCode: '19107', city: 'philadelphia' },
+    // Add more hospitals here - format: lowercase hospital name as key
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    // If urgency is set to "emergency", automatically set requiredDate to today
+    if (name === 'urgency' && value === 'emergency') {
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        requiredDate: todayString
+      }));
+    } 
+    // Auto-fill hospital address, zip code, and hospital city when hospital name and city are provided
+    else if (name === 'hospitalName' || name === 'hospitalCity' || name === 'city') {
+      const hospitalName = name === 'hospitalName' ? value.toLowerCase().trim() : formData.hospitalName?.toLowerCase().trim();
+      const hospitalCity = name === 'hospitalCity' ? value.toLowerCase().trim() : 
+                          name === 'city' ? value.toLowerCase().trim() : 
+                          formData.hospitalCity?.toLowerCase().trim() || formData.city?.toLowerCase().trim();
+      
+      setFormData(prev => {
+        const updated = { ...prev, [name]: value };
+        
+        // If hospitalCity is being set, also update city for backward compatibility
+        if (name === 'hospitalCity') {
+          updated.city = value; // Keep city in sync for backward compatibility
+        }
+        // If city is being set in hospital section, also set hospitalCity
+        else if (name === 'city' && formData.hospitalName) {
+          updated.hospitalCity = value; // Set hospitalCity when city is set
+        }
+        
+        // Try to find hospital in database
+        if (hospitalName && hospitalCity) {
+          const hospitalKey = Object.keys(hospitalDatabase).find(
+            key => key.includes(hospitalName) || hospitalName.includes(key)
+          );
+          
+          if (hospitalKey && hospitalDatabase[hospitalKey].city === hospitalCity) {
+            updated.hospitalAddress = hospitalDatabase[hospitalKey].address;
+            updated.zipCode = hospitalDatabase[hospitalKey].zipCode;
+            updated.hospitalCity = hospitalDatabase[hospitalKey].city;
+            updated.city = hospitalDatabase[hospitalKey].city; // Also update legacy city field
+          }
+        }
+        
+        return updated;
+      });
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -96,7 +154,8 @@ const Request = () => {
       requiredDate: formData.requiredDate,
       hospitalName: formData.hospitalName,
       hospitalAddress: formData.hospitalAddress,
-      city: formData.city,
+      hospitalCity: formData.hospitalCity || formData.city, // Use hospitalCity, fallback to city
+      city: formData.city, // Keep for backward compatibility
       state: formData.state,
       zipCode: formData.zipCode,
       patientCondition: formData.patientCondition || null,
@@ -124,6 +183,7 @@ const Request = () => {
             urgency: '',
             hospitalName: '',
             hospitalAddress: '',
+            hospitalCity: '',
             city: '',
             state: '',
             zipCode: '',
@@ -348,20 +408,41 @@ const Request = () => {
                 <option value="emergency">Emergency (Within 2 hours)</option>
                 <option value="urgent">Urgent (Within 6 hours)</option>
                 <option value="normal">Normal (Within 24 hours)</option>
+                <option value="scheduled">Scheduled / Planned</option>
               </select>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="requiredDate">Required Date *</label>
-              <input
-                type="date"
-                id="requiredDate"
-                name="requiredDate"
-                value={formData.requiredDate}
-                onChange={handleChange}
-                required
-              />
-            </div>
+            {formData.urgency === 'scheduled' ? (
+              <div className="form-group">
+                <label htmlFor="requiredDate">Required Date * (Minimum: Tomorrow)</label>
+                <input
+                  type="date"
+                  id="requiredDate"
+                  name="requiredDate"
+                  value={formData.requiredDate}
+                  onChange={handleChange}
+                  required
+                  min={(() => {
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    return tomorrow.toISOString().split('T')[0];
+                  })()}
+                />
+              </div>
+            ) : (
+              <div className="form-group">
+                <label htmlFor="requiredDate">Required Date *</label>
+                <input
+                  type="date"
+                  id="requiredDate"
+                  name="requiredDate"
+                  value={formData.requiredDate}
+                  onChange={handleChange}
+                  required
+                  min={formData.urgency === 'emergency' ? new Date().toISOString().split('T')[0] : undefined}
+                />
+              </div>
+            )}
 
             <div className="form-group">
               <label htmlFor="patientCondition">Patient Condition</label>
@@ -406,6 +487,18 @@ const Request = () => {
             </div>
 
             <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="hospitalCity">Hospital City *</label>
+                <input
+                  type="text"
+                  id="hospitalCity"
+                  name="hospitalCity"
+                  value={formData.hospitalCity || formData.city}
+                  onChange={handleChange}
+                  required
+                  placeholder="Hospital City (for donor matching)"
+                />
+              </div>
               <div className="form-group">
                 <label htmlFor="city">City *</label>
                 <input

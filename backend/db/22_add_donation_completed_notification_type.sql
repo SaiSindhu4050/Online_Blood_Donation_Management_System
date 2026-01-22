@@ -1,0 +1,6 @@
+USE blood_donation_db;
+
+-- Extend notifications.type ENUM to include DONATION_COMPLETED
+ALTER TABLE notifications
+MODIFY COLUMN type ENUM('BLOOD_REQUEST', 'SHARE_REQUEST', 'REQUEST_ACCEPTED', 'CAMPAIGN', 'DONATION_COMPLETED') NOT NULL;
+

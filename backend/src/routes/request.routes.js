@@ -7,7 +7,8 @@ const {
   updateRequest,
   updateRequestStatus,
   matchDonors,
-  deleteRequest
+  deleteRequest,
+  respondToRequest
 } = require('../controllers/request.controller');
 const { protect, optionalAuth, isUser } = require('../middleware/auth.middleware');
 
@@ -23,6 +24,9 @@ router.get('/:id', getRequest);
 // Match donors to request (protected - user only, for expressing interest)
 // Optional auth for backward compatibility (legacy behavior for admin use)
 router.post('/:id/match', optionalAuth, matchDonors);
+
+// Respond to request (accept/reject) - protected - user only
+router.post('/:id/respond', protect, isUser, respondToRequest);
 
 // Update request details (protected - user only)
 router.put('/:id', protect, isUser, updateRequest);

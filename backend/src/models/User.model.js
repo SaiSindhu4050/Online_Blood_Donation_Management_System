@@ -83,6 +83,18 @@ module.exports = (sequelize) => {
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true
+    },
+    availableToDonate: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    showPhoneNumber: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    anonymousMode: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     }
   }, {
     tableName: 'users',

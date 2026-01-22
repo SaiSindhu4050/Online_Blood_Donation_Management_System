@@ -5,8 +5,25 @@
 .App {
   width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: visible; /* Allow vertical scrolling */
+  height: auto; /* Don't constrain height */
+}
+
+/* Force scrolling to work - highest priority override */
+html,
+body,
+html body {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  max-height: none !important;
 }
 
 .main-content {
-  margin-top: 70px;
+  margin-top: 55px;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: visible; /* Allow vertical scrolling */
+  height: auto; /* Don't constrain height */
 }

@@ -2,17 +2,22 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // Helper function to get auth token from localStorage
-// Checks both user and organization tokens
-// Prioritizes organization token if both exist (to avoid conflicts)
+// Checks admin, organization, and user tokens
+// Prioritizes admin > organization > user (to avoid conflicts)
 const getToken = () => {
-  // Check for organization token first (to avoid using user token when org is logged in)
+  // Check for admin token first
+  const user = JSON.parse(localStorage.getItem('bl_current_user_v1') || 'null');
+  if (user?.token && user?.userType === 'admin') {
+    return user.token;
+  }
+  
+  // Then check for organization token
   const org = JSON.parse(localStorage.getItem('bl_current_org_v1') || 'null');
   if (org?.token) {
     return org.token;
   }
   
-  // Then check for user token
-  const user = JSON.parse(localStorage.getItem('bl_current_user_v1') || 'null');
+  // Finally check for user token (non-admin)
   if (user?.token) {
     return user.token;
   }
@@ -127,6 +132,14 @@ export const userAPI = {
   getDashboard: async () => {
     return apiRequest('/users/dashboard', { method: 'GET' });
   },
+
+  // Update privacy settings
+  updatePrivacySettings: async (privacySettings) => {
+    return apiRequest('/users/privacy-settings', {
+      method: 'PUT',
+      body: JSON.stringify(privacySettings),
+    });
+  },
 };
 
 // Organization API calls
@@ -149,9 +162,28 @@ export const organizationAPI = {
     return apiRequest('/organizations/dashboard', { method: 'GET' });
   },
 
-  // Get all organizations
-  getAllOrganizations: async (city) => {
-    const query = city ? `?city=${encodeURIComponent(city)}` : '';
+  // Get available donors
+  getAvailableDonors: async (filters = {}) => {
+    const queryParams = new URLSearchParams();
+    if (filters.bloodGroup) queryParams.append('bloodGroup', filters.bloodGroup);
+    if (filters.city) queryParams.append('city', filters.city);
+    if (filters.state) queryParams.append('state', filters.state);
+    
+    const queryString = queryParams.toString();
+    const url = `/organizations/available-donors${queryString ? `?${queryString}` : ''}`;
+    return apiRequest(url, { method: 'GET' });
+  },
+
+  // Get all organizations (supports city, zipCode, and search term)
+  getAllOrganizations: async (city, zipCode, search) => {
+    const queryParams = new URLSearchParams();
+    if (search) {
+      queryParams.append('search', search);
+    } else {
+      if (zipCode) queryParams.append('zipCode', zipCode);
+      else if (city) queryParams.append('city', city);
+    }
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return apiRequest(`/organizations${query}`, { method: 'GET' });
   },
 
@@ -280,6 +312,37 @@ export const requestAPI = {
   deleteRequest: async (id) => {
     return apiRequest(`/requests/${id}`, { method: 'DELETE' });
   },
+
+  // Respond to request (accept/reject)
+  respondToRequest: async (requestId, status) => {
+    return apiRequest(`/requests/${requestId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+};
+
+// Notification API calls
+export const notificationAPI = {
+  // Get user notifications
+  getNotifications: async () => {
+    return apiRequest('/notifications', { method: 'GET' });
+  },
+
+  // Mark notification as read
+  markNotificationRead: async (id) => {
+    return apiRequest(`/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+  },
+
+  // Respond to a blood request (accept/reject)
+  respondToRequest: async (requestId, status) => {
+    return apiRequest(`/requests/${requestId}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
 };
 
 // Event API calls
@@ -320,6 +383,77 @@ export const eventAPI = {
   // Get event registrations
   getEventRegistrations: async (id) => {
     return apiRequest(`/events/${id}/registrations`, { method: 'GET' });
+  },
+};
+
+// Testimonial API calls
+export const testimonialAPI = {
+  // Get public testimonials (approved only)
+  getPublicTestimonials: async (limit = 6, featured = false) => {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit);
+    if (featured) params.append('featured', 'true');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest(`/testimonials/public${query}`, { method: 'GET' });
+  },
+
+  // Create testimonial
+  createTestimonial: async (testimonialData) => {
+    return apiRequest('/testimonials', {
+      method: 'POST',
+      body: JSON.stringify(testimonialData),
+    });
+  },
+
+  // Get user's testimonials
+  getUserTestimonials: async (userId) => {
+    return apiRequest(`/testimonials/user/${userId}`, { method: 'GET' });
+  },
+
+  // Update testimonial
+  updateTestimonial: async (id, testimonialData) => {
+    return apiRequest(`/testimonials/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(testimonialData),
+    });
+  },
+
+  // Delete testimonial
+  deleteTestimonial: async (id) => {
+    return apiRequest(`/testimonials/${id}`, { method: 'DELETE' });
+  },
+};
+
+// Admin Auth API calls
+export const adminAuthAPI = {
+  loginAdmin: async (username, password) => {
+    return apiRequest('/admin/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+  },
+
+  getAdminProfile: async () => {
+    return apiRequest('/admin/auth/me', { method: 'GET' });
+  },
+};
+
+// Admin Dashboard API calls
+export const adminDashboardAPI = {
+  // Get dashboard statistics
+  getDashboardStats: async () => {
+    return apiRequest('/admin/dashboard/stats', { method: 'GET' });
+  },
+
+  // Get action queue
+  getActionQueue: async () => {
+    return apiRequest('/admin/dashboard/action-queue', { method: 'GET' });
+  },
+
+  // Get inventory heatmap
+  getInventoryHeatmap: async (bloodGroup = null) => {
+    const query = bloodGroup ? `?bloodGroup=${bloodGroup}` : '';
+    return apiRequest(`/admin/dashboard/inventory-heatmap${query}`, { method: 'GET' });
   },
 };
 

@@ -24,9 +24,19 @@ const OrganizationDashboard = () => {
   const [inventorySummary, setInventorySummary] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [rescheduleRequests, setRescheduleRequests] = useState([]);
+  const [availableDonors, setAvailableDonors] = useState([]);
+  const [donorFilters, setDonorFilters] = useState({
+    bloodGroup: '',
+    city: '',
+    state: '',
+    searchTerm: ''
+  });
+  const [isLoadingDonors, setIsLoadingDonors] = useState(false);
   const [selectedDonationType, setSelectedDonationType] = useState('All');
   const [selectedBloodType, setSelectedBloodType] = useState('All');
   const [showEventModal, setShowEventModal] = useState(false);
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [showDonationsModal, setShowDonationsModal] = useState(false);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
@@ -43,10 +53,24 @@ const OrganizationDashboard = () => {
     date: '',
     startTime: '',
     endTime: '',
-    location: '',
+    locationAddress: '',
+    locationCity: '',
+    locationState: '',
+    locationZipCode: '',
     description: '',
     maxRegistrations: ''
   });
+  const [profileFormData, setProfileFormData] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    website: '',
+    description: ''
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
     const loadOrgData = async () => {
@@ -63,6 +87,16 @@ const OrganizationDashboard = () => {
         const profileResponse = await authAPI.getMe();
         if (profileResponse.success && profileResponse.organization) {
           setOrgData(profileResponse.organization);
+          setProfileFormData({
+            name: profileResponse.organization.name || '',
+            phone: profileResponse.organization.phone || '',
+            address: profileResponse.organization.address || '',
+            city: profileResponse.organization.city || '',
+            state: profileResponse.organization.state || '',
+            zipCode: profileResponse.organization.zipCode || '',
+            website: profileResponse.organization.website || '',
+            description: profileResponse.organization.description || ''
+          });
         }
 
         // Load dashboard data
@@ -119,6 +153,25 @@ const OrganizationDashboard = () => {
       }
     } catch (error) {
       console.error('Error loading inventory:', error);
+    }
+  };
+
+  const loadAvailableDonors = async () => {
+    setIsLoadingDonors(true);
+    try {
+      const filters = {};
+      if (donorFilters.bloodGroup) filters.bloodGroup = donorFilters.bloodGroup;
+      if (donorFilters.city) filters.city = donorFilters.city;
+      if (donorFilters.state) filters.state = donorFilters.state;
+      
+      const response = await organizationAPI.getAvailableDonors(filters);
+      if (response.success) {
+        setAvailableDonors(response.donors || []);
+      }
+    } catch (error) {
+      console.error('Error loading available donors:', error);
+    } finally {
+      setIsLoadingDonors(false);
     }
   };
 
@@ -323,26 +376,66 @@ const OrganizationDashboard = () => {
     e.preventDefault();
     
     try {
+
+      // Format eventDate as DATETIME (combine date + startTime)
+      let formattedEventDate = null;
+      if (eventFormData.date) {
+        if (eventFormData.startTime) {
+          // Combine date and time
+          const [hours, minutes] = eventFormData.startTime.split(':');
+          const dateTime = new Date(eventFormData.date);
+          dateTime.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
+          formattedEventDate = dateTime.toISOString();
+        } else {
+          // Default to 9 AM if no time provided
+          const dateTime = new Date(eventFormData.date);
+          dateTime.setHours(9, 0, 0, 0);
+          formattedEventDate = dateTime.toISOString();
+        }
+      }
+
+      // Format eventEndDate (optional, for multi-day events)
+      // For now, we'll set it to null (single-day event)
+      // Can be extended later for multi-day support
+      let formattedEventEndDate = null;
+
       const newEvent = {
         name: eventFormData.name,
-        date: eventFormData.date,
-        startTime: eventFormData.startTime,
-        endTime: eventFormData.endTime,
-        location: eventFormData.location,
+        eventDate: formattedEventDate,
+        eventEndDate: formattedEventEndDate,
+        startTime: eventFormData.startTime || '09:00',
+        endTime: eventFormData.endTime || '17:00',
+        locationAddress: eventFormData.locationAddress,
+        locationCity: eventFormData.locationCity,
+        locationState: eventFormData.locationState,
+        locationZipCode: eventFormData.locationZipCode,
         description: eventFormData.description || null,
         maxRegistrations: eventFormData.maxRegistrations ? parseInt(eventFormData.maxRegistrations) : null
       };
 
-      const response = await eventAPI.createEvent(newEvent);
+      let response;
+      if (isEditingEvent && editingEventId) {
+        // Update existing event
+        response = await eventAPI.updateEvent(editingEventId, newEvent);
+      } else {
+        // Create new event
+        response = await eventAPI.createEvent(newEvent);
+      }
+
       if (response.success) {
         await loadDashboardData();
         setShowEventModal(false);
+        setIsEditingEvent(false);
+        setEditingEventId(null);
         setEventFormData({
           name: '',
           date: '',
           startTime: '',
           endTime: '',
-          location: '',
+          locationAddress: '',
+          locationCity: '',
+          locationState: '',
+          locationZipCode: '',
           description: '',
           maxRegistrations: ''
         });
@@ -364,6 +457,39 @@ const OrganizationDashboard = () => {
       console.error('Error loading event registrations:', error);
     }
     setShowEventDetailsModal(true);
+  };
+
+  const handleEditEvent = (event) => {
+    // Extract date from eventDate (DATETIME) or use date field
+    const eventDate = event.eventDate || event.date;
+    let dateStr = '';
+    let timeStr = '';
+    
+    if (eventDate) {
+      const date = new Date(eventDate);
+      dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      timeStr = `${hours}:${minutes}`;
+    }
+
+    // Pre-fill form with event data
+    setEventFormData({
+      name: event.name || '',
+      date: dateStr,
+      startTime: timeStr || event.startTime || '09:00',
+      endTime: event.endTime || '17:00',
+      locationAddress: event.locationAddress || '',
+      locationCity: event.locationCity || '',
+      locationState: event.locationState || '',
+      locationZipCode: event.locationZipCode || '',
+      description: event.description || '',
+      maxRegistrations: event.maxRegistrations ? event.maxRegistrations.toString() : ''
+    });
+
+    setIsEditingEvent(true);
+    setEditingEventId(event.id);
+    setShowEventModal(true);
   };
 
   const handleLogout = () => {
@@ -422,6 +548,12 @@ const OrganizationDashboard = () => {
           >
             Events
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            Profile
+          </button>
             <button
               className={`tab-btn ${activeTab === 'storage' ? 'active' : ''}`}
               onClick={() => {
@@ -439,6 +571,15 @@ const OrganizationDashboard = () => {
               }}
             >
               Reschedules {rescheduleRequests.length > 0 && `(${rescheduleRequests.length})`}
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'donors' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('donors');
+                loadAvailableDonors(); // Load available donors when tab is clicked
+              }}
+            >
+              Available Donors
             </button>
         </div>
 
@@ -1048,6 +1189,239 @@ const OrganizationDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'donors' && (
+          <div className="org-dashboard-content">
+            <div className="section-header">
+              <h2>Available Donors</h2>
+            </div>
+
+            {/* Filters */}
+            <div className="donor-filters" style={{ 
+              marginBottom: '20px', 
+              padding: '20px', 
+              backgroundColor: '#f8f9fa', 
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '15px',
+              flexWrap: 'wrap',
+              alignItems: 'flex-end'
+            }}>
+              <div style={{ flex: '1', minWidth: '200px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Search by Name/Email</label>
+                <input
+                  type="text"
+                  placeholder="Search donors..."
+                  value={donorFilters.searchTerm}
+                  onChange={(e) => setDonorFilters({ ...donorFilters, searchTerm: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div style={{ minWidth: '150px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Blood Group</label>
+                <select
+                  value={donorFilters.bloodGroup}
+                  onChange={(e) => {
+                    setDonorFilters({ ...donorFilters, bloodGroup: e.target.value });
+                    setTimeout(() => loadAvailableDonors(), 100);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="">All Blood Groups</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                </select>
+              </div>
+              <div style={{ minWidth: '150px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>City</label>
+                <input
+                  type="text"
+                  placeholder="Filter by city..."
+                  value={donorFilters.city}
+                  onChange={(e) => setDonorFilters({ ...donorFilters, city: e.target.value })}
+                  onBlur={() => loadAvailableDonors()}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div style={{ minWidth: '150px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>State</label>
+                <input
+                  type="text"
+                  placeholder="Filter by state..."
+                  value={donorFilters.state}
+                  onChange={(e) => setDonorFilters({ ...donorFilters, state: e.target.value })}
+                  onBlur={() => loadAvailableDonors()}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <button
+                onClick={loadAvailableDonors}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}
+              >
+                Apply Filters
+              </button>
+              <button
+                onClick={() => {
+                  setDonorFilters({ bloodGroup: '', city: '', state: '', searchTerm: '' });
+                  setTimeout(() => loadAvailableDonors(), 100);
+                }}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}
+              >
+                Clear
+              </button>
+            </div>
+
+            {/* Donors List */}
+            {isLoadingDonors ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <p>Loading available donors...</p>
+              </div>
+            ) : availableDonors.length === 0 ? (
+              <div className="empty-state">
+                <p>No available donors found matching your criteria.</p>
+              </div>
+            ) : (
+              <div className="donors-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '20px'
+              }}>
+                {availableDonors
+                  .filter(donor => {
+                    if (!donorFilters.searchTerm) return true;
+                    const searchLower = donorFilters.searchTerm.toLowerCase();
+                    return (
+                      donor.fullName?.toLowerCase().includes(searchLower) ||
+                      donor.email?.toLowerCase().includes(searchLower)
+                    );
+                  })
+                  .map(donor => (
+                    <div key={donor.id} className="donor-card" style={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '20px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}>
+                      <div style={{ marginBottom: '15px' }}>
+                        <h3 style={{ margin: '0 0 5px 0', color: '#dc2626', fontSize: '18px' }}>
+                          {donor.fullName}
+                        </h3>
+                        <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>
+                          {donor.email}
+                        </p>
+                      </div>
+                      
+                      <div style={{ marginBottom: '10px' }}>
+                        <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                          <strong>Blood Group:</strong> <span style={{ color: '#dc2626', fontWeight: '600' }}>{donor.bloodGroup}</span>
+                        </p>
+                        <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                          <strong>Location:</strong> {donor.city}, {donor.state}
+                        </p>
+                        {donor.lastDonationAt ? (
+                          <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
+                            <strong>Last Donation:</strong> {new Date(donor.lastDonationAt).toLocaleDateString()}
+                          </p>
+                        ) : (
+                          <p style={{ margin: '5px 0', fontSize: '14px', color: '#059669' }}>
+                            <strong>Status:</strong> New Donor
+                          </p>
+                        )}
+                      </div>
+
+                      <div style={{ 
+                        marginTop: '15px', 
+                        padding: '10px', 
+                        backgroundColor: '#f8f9fa', 
+                        borderRadius: '4px',
+                        borderTop: '1px solid #e5e7eb'
+                      }}>
+                        <p style={{ margin: '0 0 5px 0', fontSize: '13px', fontWeight: '600' }}>Contact Information:</p>
+                        {donor.phone ? (
+                          <p style={{ margin: '5px 0', fontSize: '14px' }}>
+                            <strong>Phone:</strong> {donor.phone}
+                          </p>
+                        ) : (
+                          <p style={{ margin: '5px 0', fontSize: '14px', fontStyle: 'italic', color: '#666' }}>
+                            Contact via app only
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {availableDonors.length > 0 && (
+              <div style={{ marginTop: '20px', textAlign: 'center', color: '#666', fontSize: '14px' }}>
+                Showing {availableDonors.filter(donor => {
+                  if (!donorFilters.searchTerm) return true;
+                  const searchLower = donorFilters.searchTerm.toLowerCase();
+                  return (
+                    donor.fullName?.toLowerCase().includes(searchLower) ||
+                    donor.email?.toLowerCase().includes(searchLower)
+                  );
+                }).length} available donor{availableDonors.filter(donor => {
+                  if (!donorFilters.searchTerm) return true;
+                  const searchLower = donorFilters.searchTerm.toLowerCase();
+                  return (
+                    donor.fullName?.toLowerCase().includes(searchLower) ||
+                    donor.email?.toLowerCase().includes(searchLower)
+                  );
+                }).length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'reschedules' && (
           <div className="tab-content">
             <div className="section-header">
@@ -1082,7 +1456,11 @@ const OrganizationDashboard = () => {
                     <div className="request-details" style={{ marginBottom: '15px' }}>
                       <p><strong>Donor:</strong> {request.user?.fullName || request.donation?.fullName}</p>
                       <p><strong>Email:</strong> {request.user?.email || request.donation?.email}</p>
-                      {request.user?.phone && <p><strong>Phone:</strong> {request.user.phone}</p>}
+                      {request.user?.phone ? (
+                        <p><strong>Phone:</strong> {request.user.phone}</p>
+                      ) : (
+                        <p><strong>Contact:</strong> <span style={{fontStyle: 'italic', color: '#666'}}>Contact via app only</span></p>
+                      )}
                       
                       <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
                         <p><strong>Current Appointment:</strong></p>
@@ -1152,7 +1530,23 @@ const OrganizationDashboard = () => {
           <div className="org-dashboard-content">
             <div className="section-header">
               <h2>Events</h2>
-              <button className="create-event-btn" onClick={() => setShowEventModal(true)}>
+              <button className="create-event-btn" onClick={() => {
+                setIsEditingEvent(false);
+                setEditingEventId(null);
+                setEventFormData({
+                  name: '',
+                  date: '',
+                  startTime: '',
+                  endTime: '',
+                  locationAddress: '',
+                  locationCity: '',
+                  locationState: '',
+                  locationZipCode: '',
+                  description: '',
+                  maxRegistrations: ''
+                });
+                setShowEventModal(true);
+              }}>
                 ➕ Create New Event
               </button>
             </div>
@@ -1168,13 +1562,34 @@ const OrganizationDashboard = () => {
                     <div key={event.id} className="event-card">
                       <div className="event-header">
                         <h3>{event.name}</h3>
-                        <span className="event-date">{new Date(event.date).toLocaleDateString()}</span>
+                        <span className="event-date">
+                          {event.eventDate ? new Date(event.eventDate).toLocaleDateString() : 
+                           event.date ? new Date(event.date).toLocaleDateString() : 'Date TBD'}
+                        </span>
                       </div>
                       <div className="event-details">
-                        <p><strong>Date:</strong> {new Date(event.date).toLocaleDateString()}</p>
-                        <p><strong>Time:</strong> {event.startTime} - {event.endTime}</p>
-                        <p><strong>Location:</strong> {event.location}</p>
-                        <p><strong>Registrations:</strong> {registrationCount} {event.maxRegistrations ? `/ ${event.maxRegistrations}` : ''}</p>
+                        <p><strong>Date:</strong> {
+                          event.eventDate ? new Date(event.eventDate).toLocaleDateString() : 
+                          event.date ? new Date(event.date).toLocaleDateString() : 'Date TBD'
+                        }</p>
+                        <p><strong>Time:</strong> {event.startTime || '09:00'} - {event.endTime || '17:00'}</p>
+                        <p><strong>Location:</strong> {
+                          event.locationAddress ? 
+                            `${event.locationAddress}, ${event.locationCity || ''}, ${event.locationState || ''}`.trim().replace(/^,\s*|,\s*$/g, '') :
+                            event.location || 'Location TBD'
+                        }</p>
+                        <p><strong>Registrations:</strong> 
+                          <span style={{ 
+                            color: event.isFull ? '#dc2626' : event.maxRegistrations ? '#059669' : '#6b7280',
+                            fontWeight: '600',
+                            marginLeft: '8px'
+                          }}>
+                            {registrationCount} {event.maxRegistrations ? `/ ${event.maxRegistrations}` : ''}
+                            {event.isFull && ' (FULL)'}
+                            {event.spotsRemaining !== null && event.spotsRemaining > 0 && !event.isFull && 
+                              ` (${event.spotsRemaining} spots remaining)`}
+                          </span>
+                        </p>
                         {event.description && <p><strong>Description:</strong> {event.description}</p>}
                       </div>
                       <div className="event-actions">
@@ -1183,6 +1598,12 @@ const OrganizationDashboard = () => {
                           onClick={() => handleViewEventDetails(event)}
                         >
                           👁️ View Registrations ({registrationCount})
+                        </button>
+                        <button 
+                          className="btn-edit"
+                          onClick={() => handleEditEvent(event)}
+                        >
+                          ✏️ Edit
                         </button>
                         <button 
                           className="btn-delete"
@@ -1205,6 +1626,152 @@ const OrganizationDashboard = () => {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="org-dashboard-content">
+            <div className="section-header">
+              <h2>Organization Profile</h2>
+              <p>Update your contact and location details used for matching donors and requests.</p>
+            </div>
+            <form
+              className="org-profile-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setProfileSaving(true);
+                  const response = await organizationAPI.updateProfile({
+                    name: profileFormData.name.trim(),
+                    phone: profileFormData.phone.trim(),
+                    address: profileFormData.address.trim(),
+                    city: profileFormData.city.trim(),
+                    state: profileFormData.state.trim(),
+                    zipCode: profileFormData.zipCode.trim(),
+                    website: profileFormData.website.trim() || null,
+                    description: profileFormData.description.trim() || null
+                  });
+                  if (response?.success && response.organization) {
+                    setOrgData(response.organization);
+                    alert('Profile updated successfully.');
+                  }
+                } catch (error) {
+                  console.error('Error updating organization profile:', error);
+                  alert(error.message || 'Failed to update profile. Please try again.');
+                } finally {
+                  setProfileSaving(false);
+                }
+              }}
+            >
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Organization Name</label>
+                  <input
+                    type="text"
+                    value={profileFormData.name}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={profileFormData.phone}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, phone: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Address</label>
+                <input
+                  type="text"
+                  value={profileFormData.address}
+                  onChange={(e) =>
+                    setProfileFormData((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>City</label>
+                  <input
+                    type="text"
+                    value={profileFormData.city}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, city: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>State</label>
+                  <input
+                    type="text"
+                    value={profileFormData.state}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, state: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>ZIP Code</label>
+                  <input
+                    type="text"
+                    value={profileFormData.zipCode}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, zipCode: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Website (optional)</label>
+                  <input
+                    type="url"
+                    value={profileFormData.website}
+                    onChange={(e) =>
+                      setProfileFormData((prev) => ({ ...prev, website: e.target.value }))
+                    }
+                    placeholder="https://example.org"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description (optional)</label>
+                <textarea
+                  rows="3"
+                  value={profileFormData.description}
+                  onChange={(e) =>
+                    setProfileFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  placeholder="Describe your services (e.g., Blood Bank Services, Hospital Blood Services)..."
+                />
+              </div>
+
+              <div className="profile-actions">
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  disabled={profileSaving}
+                >
+                  {profileSaving ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
         </div>
@@ -1281,8 +1848,24 @@ const OrganizationDashboard = () => {
         <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Create New Event</h2>
-              <button className="modal-close" onClick={() => setShowEventModal(false)}>×</button>
+              <h2>{isEditingEvent ? 'Edit Event' : 'Create New Event'}</h2>
+              <button className="modal-close" onClick={() => {
+                setShowEventModal(false);
+                setIsEditingEvent(false);
+                setEditingEventId(null);
+                setEventFormData({
+                  name: '',
+                  date: '',
+                  startTime: '',
+                  endTime: '',
+                  locationAddress: '',
+                  locationCity: '',
+                  locationState: '',
+                  locationZipCode: '',
+                  description: '',
+                  maxRegistrations: ''
+                });
+              }}>×</button>
             </div>
             <form onSubmit={handleCreateEvent} className="event-form">
               <div className="form-group">
@@ -1324,13 +1907,46 @@ const OrganizationDashboard = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Location *</label>
+                <label>Location Address *</label>
                 <input
                   type="text"
-                  value={eventFormData.location}
-                  onChange={(e) => setEventFormData({...eventFormData, location: e.target.value})}
+                  value={eventFormData.locationAddress}
+                  onChange={(e) => setEventFormData({...eventFormData, locationAddress: e.target.value})}
+                  placeholder="e.g., 123 Main Street"
                   required
                 />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>City *</label>
+                  <input
+                    type="text"
+                    value={eventFormData.locationCity}
+                    onChange={(e) => setEventFormData({...eventFormData, locationCity: e.target.value})}
+                    placeholder="e.g., Edison"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>State *</label>
+                  <input
+                    type="text"
+                    value={eventFormData.locationState}
+                    onChange={(e) => setEventFormData({...eventFormData, locationState: e.target.value})}
+                    placeholder="e.g., New Jersey"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>ZIP Code *</label>
+                  <input
+                    type="text"
+                    value={eventFormData.locationZipCode}
+                    onChange={(e) => setEventFormData({...eventFormData, locationZipCode: e.target.value})}
+                    placeholder="e.g., 08817"
+                    required
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label>Description</label>
@@ -1350,11 +1966,27 @@ const OrganizationDashboard = () => {
                 />
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setShowEventModal(false)}>
+                <button type="button" className="btn-cancel" onClick={() => {
+                  setShowEventModal(false);
+                  setIsEditingEvent(false);
+                  setEditingEventId(null);
+                  setEventFormData({
+                    name: '',
+                    date: '',
+                    startTime: '',
+                    endTime: '',
+                    locationAddress: '',
+                    locationCity: '',
+                    locationState: '',
+                    locationZipCode: '',
+                    description: '',
+                    maxRegistrations: ''
+                  });
+                }}>
                   Cancel
                 </button>
                 <button type="submit" className="btn-submit">
-                  Create Event
+                  {isEditingEvent ? 'Update Event' : 'Create Event'}
                 </button>
               </div>
             </form>

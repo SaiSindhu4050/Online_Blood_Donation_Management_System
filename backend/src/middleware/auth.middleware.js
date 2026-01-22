@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Organization } = require('../models');
+const { User, Organization, Admin } = require('../models');
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
@@ -37,7 +37,7 @@ exports.protect = async (req, res, next) => {
         }
         console.error('Organization not found for ID:', decoded.id);
         return res.status(401).json({ message: 'Organization not found' });
-      } else if (tokenType === 'user') {
+      } else       if (tokenType === 'user') {
         // Token explicitly says it's a user
         const user = await User.findByPk(decoded.id);
         if (user && user.isActive) {
@@ -49,6 +49,19 @@ exports.protect = async (req, res, next) => {
           return res.status(401).json({ message: 'User account is inactive' });
         }
         return res.status(401).json({ message: 'User not found' });
+      } else if (tokenType === 'admin') {
+        // Token explicitly says it's an admin
+        const admin = await Admin.findByPk(decoded.id);
+        if (admin && admin.isActive) {
+          req.user = admin;
+          req.userType = 'admin';
+          req.adminRole = admin.role;
+          return next();
+        }
+        if (admin && !admin.isActive) {
+          return res.status(401).json({ message: 'Admin account is inactive' });
+        }
+        return res.status(401).json({ message: 'Admin not found' });
       } else {
         // Backward compatibility: no type in token, check both tables
         // This handles old tokens that don't have the type field
@@ -126,6 +139,28 @@ exports.isOrganization = (req, res, next) => {
         userType: req.userType,
         userId: req.user?.id
       } : undefined
+    });
+  }
+  next();
+};
+
+// Check if user is an admin
+exports.isAdmin = (req, res, next) => {
+  if (req.userType !== 'admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Access denied. Admin access required.'
+    });
+  }
+  next();
+};
+
+// Check if user is a super admin
+exports.isSuperAdmin = (req, res, next) => {
+  if (req.userType !== 'admin' || req.adminRole !== 'super_admin') {
+    return res.status(403).json({ 
+      success: false,
+      message: 'Access denied. Super admin access required.'
     });
   }
   next();

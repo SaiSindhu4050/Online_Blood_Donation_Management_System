@@ -71,9 +71,66 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       defaultValue: 0
     },
+    maxRegistrations: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null
+    },
     status: {
       type: DataTypes.ENUM('upcoming', 'ongoing', 'completed', 'cancelled'),
       defaultValue: 'upcoming'
+    },
+    cancelledAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    cancellationReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    cancelledBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'organizations',
+        key: 'id'
+      }
+    },
+    originalEventDate: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    rescheduledAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    rescheduleReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    rescheduledBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'organizations',
+        key: 'id'
+      }
+    },
+    rescheduleCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    requiresPreScreening: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    preScreeningDeadline: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    autoRejectIneligible: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
     }
   }, {
     tableName: 'events'

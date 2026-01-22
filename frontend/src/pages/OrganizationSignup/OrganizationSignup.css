@@ -1,28 +1,32 @@
 .org-signup-container {
-  min-height: 100vh;
+  height: calc(100vh - 55px);
+  min-height: calc(100vh - 55px);
+  overflow: hidden;
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  padding: 100px 20px 40px;
+  padding: clamp(1rem, 3vw, 2rem);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .org-signup-wrapper {
-  max-width: 1200px;
   width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  height: fit-content;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
   background: white;
-  border-radius: 20px;
+  border-radius: clamp(1rem, 2vw, 1.25rem);
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  min-height: 700px;
+  min-height: 200px;
 }
 
 .org-signup-left {
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  padding: 60px 50px;
+  padding: clamp(2rem, 5vw, 3.75rem) clamp(1.5rem, 4vw, 3.125rem);
   display: flex;
   align-items: center;
   position: relative;
@@ -106,27 +110,28 @@
 }
 
 .org-signup-right {
-  padding: 60px 50px;
+  padding: clamp(0.75rem, 2.5vw, 1.875rem) clamp(1.25rem, 4vw, 3.125rem) clamp(0.75rem, 2.5vw, 1.875rem) clamp(1.25rem, 4vw, 3.125rem); /* Top and bottom: half of original */
   display: flex;
   align-items: center;
   background: white;
   overflow-y: auto;
-  max-height: 700px;
+  max-height: 85vh;
 }
 
 .org-signup-form-container {
   width: 100%;
+  max-width: 100%;
 }
 
 .org-signup-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 2rem; /* Fixed, equal spacing */
 }
 
 .org-signup-header h2 {
-  font-size: 2.5rem;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 0.5rem; /* Fixed, equal spacing */
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -135,7 +140,7 @@
 
 .org-signup-header p {
   color: #6c757d;
-  font-size: 1rem;
+  font-size: clamp(0.9rem, 1.8vw, 1rem);
 }
 
 .org-signup-form {
@@ -149,15 +154,15 @@
 }
 
 .form-group {
-  margin-bottom: 25px;
+  margin-bottom: 1.5rem; /* Fixed, equal spacing */
 }
 
 .form-group label {
   display: block;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem; /* Fixed, equal spacing */
   color: #212529;
-  font-size: 0.95rem;
+  font-size: clamp(0.875rem, 1.8vw, 0.95rem);
 }
 
 .input-wrapper {
@@ -176,13 +181,15 @@
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 14px 18px 14px 50px;
+  padding: clamp(0.875rem, 2vw, 0.875rem) clamp(1rem, 2.5vw, 1.125rem) clamp(0.875rem, 2vw, 0.875rem) 50px;
   border: 2px solid #e9ecef;
-  border-radius: 10px;
-  font-size: 1rem;
+  border-radius: clamp(0.5rem, 1.5vw, 0.625rem);
+  font-size: clamp(1rem, 1.8vw, 1rem);
   transition: all 0.3s ease;
   font-family: inherit;
   background: #f8f9fa;
+  box-sizing: border-box;
+  min-height: clamp(50px, 6vw, 50px);
 }
 
 .form-group select {
@@ -218,7 +225,7 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 1.5rem; /* Match form-group spacing */
 }
 
 .form-checkbox input[type="checkbox"] {
@@ -254,21 +261,22 @@
 
 .submit-btn {
   width: 100%;
-  padding: 16px 32px;
+  padding: clamp(1rem, 2.5vw, 1rem) clamp(1.5rem, 4vw, 2rem);
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
   color: white;
   border: none;
   border-radius: 50px;
-  font-size: 1.1rem;
+  font-size: clamp(1rem, 2vw, 1.1rem);
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: clamp(0.5rem, 1.5vw, 0.625rem);
   transition: all 0.3s ease;
   box-shadow: 0 5px 20px rgba(45, 134, 89, 0.3);
-  margin-bottom: 25px;
+  margin-bottom: 1.5rem; /* Match form-group spacing */
+  min-height: clamp(50px, 6vw, 50px);
 }
 
 .submit-btn:hover:not(:disabled) {
@@ -313,8 +321,15 @@
 
 /* Responsive */
 @media (max-width: 968px) {
+  .org-signup-container {
+    height: calc(100vh - 55px);
+    min-height: calc(100vh - 55px);
+    overflow: hidden;
+  }
   .org-signup-wrapper {
     grid-template-columns: 1fr;
+    max-width: 100%;
+    max-height: 90vh;
   }
 
   .org-signup-left {
@@ -322,22 +337,28 @@
   }
 
   .org-signup-right {
-    padding: 40px 30px;
-    max-height: none;
+    padding: clamp(1.5rem, 5vw, 2.5rem) clamp(1.25rem, 4vw, 1.875rem);
+    max-height: 85vh;
+    overflow-y: auto;
   }
 }
 
 @media (max-width: 768px) {
   .org-signup-container {
-    padding: 80px 15px 30px;
+    padding: clamp(4rem, 8vw, 5rem) clamp(0.9375rem, 3vw, 1.5rem) clamp(1.5rem, 4vw, 1.875rem);
+  }
+
+  .org-signup-wrapper {
+    width: 90%;
+    max-width: 450px;
   }
 
   .org-signup-right {
-    padding: 30px 20px;
+    padding: clamp(1.5rem, 5vw, 1.875rem) clamp(1rem, 4vw, 1.25rem);
   }
 
   .org-signup-header h2 {
-    font-size: 2rem;
+    font-size: clamp(1.5rem, 4vw, 2rem);
   }
 
   .form-row {
@@ -345,3 +366,90 @@
   }
 }
 
+/* Laptop - Ensure form fits in viewport */
+@media (min-width: 969px) and (max-width: 1399px) {
+  .org-signup-container {
+    height: calc(100vh - 55px);
+    min-height: calc(100vh - 55px);
+    overflow: hidden;
+  }
+
+  .org-signup-wrapper {
+    max-height: 90vh;
+    height: fit-content;
+  }
+
+  .org-signup-right {
+    padding: 0 2.5rem 1.5rem 2.5rem !important; /* Zero top padding, minimal bottom */
+    max-height: 85vh !important;
+    overflow-y: auto !important;
+    align-items: flex-start !important; /* Force override */
+    justify-content: flex-start !important;
+    display: flex !important;
+    flex-direction: column !important;
+    scroll-snap-align: start;
+    scroll-padding-top: 0;
+    scroll-behavior: auto;
+  }
+
+  /* Force scroll to top on initial load */
+  .org-signup-right:not(:focus-within) {
+    scroll-behavior: auto;
+  }
+
+  .org-signup-form-container {
+    width: 100%;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  /* Reduce spacing to fit more content */
+  .org-signup-header {
+    margin-bottom: 1.5rem; /* Consistent spacing */
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .form-group {
+    margin-bottom: 1.25rem; /* Slightly reduced for laptop */
+  }
+
+  .submit-btn {
+    margin-bottom: 1.25rem; /* Match form-group spacing */
+  }
+}
+
+/* Large Desktop */
+@media (min-width: 1400px) {
+  .org-signup-wrapper {
+    max-width: 1200px;
+  }
+
+  .org-signup-right {
+    padding: 1.875rem 3.125rem; /* Top and bottom: half of original (1.875rem) */
+    align-items: flex-start; /* Start content at top instead of center */
+    justify-content: flex-start;
+  }
+
+  .org-signup-form-container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .org-signup-header {
+    margin-bottom: 2rem; /* Consistent spacing */
+  }
+
+  .org-signup-header h2 {
+    font-size: 2.5rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem; /* Consistent spacing */
+  }
+
+  .submit-btn {
+    padding: 1rem 2rem;
+    min-height: 50px;
+  }
+}

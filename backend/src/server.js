@@ -3,6 +3,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 require('dotenv').config();
 const { connectDB, syncModels } = require('./config/database');
+const { startEventScheduler } = require('./utils/eventScheduler');
+const { startPreScreeningReminderScheduler } = require('./utils/preScreeningReminder');
 
 const app = express();
 
@@ -19,6 +21,10 @@ app.use(morgan('dev'));
 connectDB().then(() => {
   // Sync models after connection is established
   syncModels();
+  // Start event scheduler for automatic status updates and reminders
+  startEventScheduler();
+  // Start pre-screening reminder scheduler
+  startPreScreeningReminderScheduler();
 });
 
 // Routes
@@ -28,6 +34,14 @@ app.use('/api/organizations', require('./routes/organization.routes'));
 app.use('/api/donations', require('./routes/donation.routes'));
 app.use('/api/requests', require('./routes/request.routes'));
 app.use('/api/events', require('./routes/event.routes'));
+app.use('/api/notifications', require('./routes/notification.routes'));
+app.use('/api/testimonials', require('./routes/testimonial.routes'));
+app.use('/api/admin/auth', require('./routes/adminAuth.routes'));
+app.use('/api/admin/dashboard', require('./routes/adminDashboard.routes'));
+app.use('/api', require('./routes/eventWaitlist.routes'));
+app.use('/api', require('./routes/eventCheckin.routes'));
+app.use('/api', require('./routes/eventCancellation.routes'));
+app.use('/api', require('./routes/preScreening.routes'));
 
 // Health Check
 app.get('/api/health', (req, res) => {

@@ -1,32 +1,49 @@
+/* OrganizationLogin.css - Fixed Position "No Scroll" Version */
+
+/* Note: Removed global html/body overflow: hidden to prevent affecting other pages */
+
+/* 2. MAIN CONTAINER: Locked to the viewport */
 .org-login-container {
-  min-height: 100vh;
+  position: fixed; /* 🔒 Locks container to the window */
+  top: 70px;       /* Starts exactly below Navbar */
+  left: 0;
+  right: 0;
+  bottom: 0;       /* Stretches to the very bottom */
+  width: 100%;
+  
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  padding: 100px 20px 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden; /* Cuts off any overflow */
+  z-index: 1;
 }
 
+/* 3. WRAPPER: The White Card */
 .org-login-wrapper {
-  max-width: 1200px;
   width: 100%;
+  max-width: 1000px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
   background: white;
-  border-radius: 20px;
-  overflow: hidden;
+  border-radius: clamp(1rem, 2vw, 1.25rem);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  min-height: 600px;
+  
+  /* Height Logic: Never touch the edges */
+  height: auto;
+  max-height: 90%; 
 }
 
+/* --- LEFT SIDE --- */
 .org-login-left {
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  padding: 60px 50px;
+  padding: 2.5rem; 
   display: flex;
   align-items: center;
   position: relative;
   overflow: hidden;
+  height: 100%; /* Fill the wrapper height */
 }
 
 .org-login-left::before {
@@ -40,244 +57,129 @@
   opacity: 0.3;
 }
 
-.org-login-hero {
-  position: relative;
-  z-index: 1;
-  color: white;
-}
+.org-login-hero { position: relative; z-index: 1; color: white; width: 100%; }
 
-.org-login-logo {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 40px;
-}
+.org-login-logo { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
+.logo-icon { font-size: 2rem; }
+.org-login-logo h1 { font-size: 1.75rem; font-weight: 800; margin: 0; }
 
-.logo-icon {
-  font-size: 3rem;
-}
+.org-login-hero h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
+.org-login-hero > p { font-size: 0.95rem; opacity: 0.9; margin-bottom: 2rem; line-height: 1.5; }
 
-.org-login-logo h1 {
-  font-size: 2.5rem;
-  font-weight: 800;
+.org-login-features { display: flex; flex-direction: column; gap: 1.25rem; }
+.feature-item { display: flex; align-items: flex-start; gap: 1rem; }
+.feature-icon {
+  font-size: 1.25rem; flex-shrink: 0;
+  background: rgba(255,255,255,0.2); width: 35px; height: 35px;
+  display: flex; align-items: center; justify-content: center; border-radius: 8px;
 }
+.feature-item h4 { font-size: 1rem; font-weight: 600; margin: 0 0 0.25rem 0; }
+.feature-item p { font-size: 0.85rem; opacity: 0.8; line-height: 1.4; margin: 0; }
 
-.org-login-hero h2 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 15px;
-}
-
-.org-login-hero > p {
-  font-size: 1.1rem;
-  opacity: 0.9;
-  margin-bottom: 40px;
-  line-height: 1.6;
-}
-
-.org-login-features {
+/* --- RIGHT SIDE --- */
+.org-login-right {
+  padding: 2rem; 
+  width: 100%;
+  /* CRITICAL: Allow scrolling INSIDE this box if screen is tiny */
+  overflow-y: auto; 
   display: flex;
   flex-direction: column;
-  gap: 25px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 15px;
-}
-
-.feature-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.feature-item h4 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 5px;
-}
-
-.feature-item p {
-  font-size: 0.95rem;
-  opacity: 0.8;
-  line-height: 1.5;
-}
-
-.org-login-right {
-  padding: 60px 50px;
-  display: flex;
-  align-items: center;
+  justify-content: center;
   background: white;
+  height: 100%; 
 }
 
-.org-login-form-container {
-  width: 100%;
-}
-
-.org-login-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
+.org-login-header { text-align: center; margin-bottom: 1rem; }
 .org-login-header h2 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem;
   background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
+.org-login-header p { color: #6c757d; font-size: 0.85rem; }
 
-.org-login-header p {
-  color: #6c757d;
-  font-size: 1rem;
+.org-login-form { width: 100%; }
+.form-group { margin-bottom: 0.75rem; }
+.form-group label { display: block; font-weight: 600; margin-bottom: 0.2rem; color: #212529; font-size: 0.85rem; }
+
+.input-wrapper { position: relative; width: 100%; }
+.input-wrapper input {
+  width: 100%; padding-left: 38px !important; height: 40px; 
+  box-sizing: border-box; font-size: 0.9rem; border: 2px solid #e9ecef; border-radius: 0.5rem;
+  transition: all 0.3s ease; font-family: inherit; background: #f8f9fa;
 }
-
-.org-login-form {
-  width: 100%;
-}
-
-.form-group {
-  margin-bottom: 25px;
-}
-
-.form-group label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #212529;
-  font-size: 0.95rem;
-}
-
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
 .input-icon {
-  position: absolute;
-  left: 18px;
-  color: #6c757d;
-  z-index: 1;
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: #6c757d; z-index: 2; width: 16px; height: 16px;
 }
-
-.form-group input {
-  width: 100%;
-  padding: 14px 18px 14px 50px;
-  border: 2px solid #e9ecef;
-  border-radius: 10px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-  font-family: inherit;
-  background: #f8f9fa;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #2d8659;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(45, 134, 89, 0.1);
-}
-
-.form-group input.error {
-  border-color: #ff6b6b;
-}
-
-.error-message {
-  display: block;
-  color: #ff6b6b;
-  font-size: 0.85rem;
-  margin-top: 5px;
-}
+.input-wrapper input:focus { outline: none; border-color: #2d8659; background: white; box-shadow: 0 0 0 3px rgba(45, 134, 89, 0.1); }
+.form-group input.error { border-color: #ff6b6b; }
+.error-message { display: block; color: #ff6b6b; font-size: 0.75rem; margin-top: 0.1rem; }
 
 .submit-btn {
-  width: 100%;
-  padding: 16px 32px;
-  background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
-  color: white;
-  border: none;
-  border-radius: 50px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: all 0.3s ease;
-  box-shadow: 0 5px 20px rgba(45, 134, 89, 0.3);
-  margin-bottom: 25px;
+  width: 100%; height: 40px; background: linear-gradient(135deg, #2d8659 0%, #1e5d3f 100%);
+  color: white; border: none; border-radius: 50px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  transition: all 0.3s ease; box-shadow: 0 5px 20px rgba(45, 134, 89, 0.3); margin-bottom: 0.75rem; 
 }
+.submit-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(45, 134, 89, 0.4); }
+.submit-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+.spinner { width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.submit-btn:hover:not(:disabled) {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 30px rgba(45, 134, 89, 0.4);
-}
+.signup-link { text-align: center; color: #6c757d; font-size: 0.85rem; margin-top: 0.25rem; }
+.signup-link a { color: #2d8659; text-decoration: none; font-weight: 600; transition: color 0.3s ease; }
+.signup-link a:hover { color: #1e5d3f; }
 
-.submit-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
 
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
+/* ========================================= */
+/* ⚡️ RESPONSIVE FIXES ⚡️ */
+/* ========================================= */
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.signup-link {
-  text-align: center;
-  color: #6c757d;
-  font-size: 0.95rem;
-}
-
-.signup-link a {
-  color: #2d8659;
-  text-decoration: none;
-  font-weight: 600;
-  transition: color 0.3s ease;
-}
-
-.signup-link a:hover {
-  color: #1e5d3f;
-}
-
-/* Responsive */
+/* 1. TABLET & MOBILE */
 @media (max-width: 968px) {
+  /* RESET HTML/BODY scrolling for mobile devices */
+  html, body {
+    overflow: auto; 
+    height: auto;
+  }
+
+  .org-login-container {
+    position: relative; /* Unlock fixed position on mobile */
+    top: 0;
+    height: auto;
+    min-height: calc(100vh - 70px);
+    overflow: visible; 
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
   .org-login-wrapper {
     grid-template-columns: 1fr;
+    max-width: 95%;
+    max-height: none; 
+    height: auto;
+    border-radius: 1rem;
   }
 
-  .org-login-left {
-    display: none;
-  }
-
-  .org-login-right {
-    padding: 40px 30px;
-  }
+  .org-login-left { display: none; }
+  .org-login-right { padding: 2rem; height: auto; overflow: visible; }
 }
 
-@media (max-width: 768px) {
-  .org-login-container {
-    padding: 80px 15px 30px;
+/* 2. LAPTOP FIX */
+/* Target screens that are wide but short */
+@media (min-width: 969px) and (max-height: 900px) {
+  .org-login-wrapper {
+    max-height: 92%; /* Use available height */
+    max-width: 900px;
   }
-
-  .org-login-right {
-    padding: 30px 20px;
+  .org-login-right, .org-login-left {
+    padding: 1.5rem;
   }
-
-  .org-login-header h2 {
-    font-size: 2rem;
-  }
+  .form-group { margin-bottom: 0.5rem; }
+  .org-login-header { margin-bottom: 0.5rem; }
 }
 
+/* 3. MOBILE SMALL */
+@media (max-width: 480px) {
+  .org-login-right { padding: 1.5rem; }
+}

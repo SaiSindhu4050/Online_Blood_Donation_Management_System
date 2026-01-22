@@ -289,6 +289,7 @@
 .btn-approve,
 .btn-deny,
 .btn-view,
+.btn-edit,
 .btn-delete {
   padding: 10px 20px;
   border: none;
@@ -325,6 +326,16 @@
 
 .btn-view:hover {
   background: #138496;
+  transform: translateY(-2px);
+}
+
+.btn-edit {
+  background: #ffc107;
+  color: #000;
+}
+
+.btn-edit:hover {
+  background: #e0a800;
   transform: translateY(-2px);
 }
 
@@ -511,6 +522,17 @@
   color: #495057;
 }
 
+/* Organization profile form */
+.org-profile-form {
+  max-width: 700px;
+}
+
+.org-profile-form .profile-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .org-dashboard-header {
@@ -549,6 +571,7 @@
   .btn-approve,
   .btn-deny,
   .btn-view,
+  .btn-edit,
   .btn-delete {
     width: 100%;
   }

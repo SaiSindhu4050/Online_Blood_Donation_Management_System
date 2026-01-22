@@ -111,8 +111,11 @@ const Donate = () => {
               zipCode: fullUser.zipCode || prev.zipCode
             }));
             
-            // Load organizations near user
-            const orgsResponse = await organizationAPI.getAllOrganizations(fullUser.city);
+            // Load organizations near user (prefer ZIP, fallback to city)
+            const orgsResponse = await organizationAPI.getAllOrganizations(
+              fullUser.city,
+              fullUser.zipCode
+            );
             if (orgsResponse.success) {
               setOrganizations(orgsResponse.organizations || []);
             }
